@@ -45,8 +45,8 @@ impl std::fmt::Debug for Gate {
 impl Gate {
     /// Create a `Gate` client with default settings.
     ///
-    /// Panics if the API key is empty or the HTTP client cannot be
-    /// initialised. Use [`Gate::builder`] for fallible construction.
+    /// Panics if the API key is empty or the HTTP client cannot be initialized.
+    /// Use [`Gate::builder`] for fallible construction.
     pub fn new(api_key: impl Into<String>) -> Self {
         let key = api_key.into();
         Self::builder()

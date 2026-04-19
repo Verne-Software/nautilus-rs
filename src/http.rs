@@ -4,6 +4,8 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use crate::error::{ApiError, Error};
 
+const API_URL: &str = "https://api.vernesoft.com";
+
 pub(crate) struct HttpClient {
     api_key: String,
     base_url: String,
@@ -37,7 +39,7 @@ impl HttpClient {
 
         Ok(Self {
             api_key: api_key.into(),
-            base_url: base_url.unwrap_or_else(|| "https://api.vernesoft.com".into()),
+            base_url: base_url.unwrap_or_else(|| API_URL.into()),
             client,
         })
     }
