@@ -1,4 +1,4 @@
-use vernesoft::{Error, Verne};
+use nautilus::{Error, Verne};
 
 #[tokio::test]
 async fn test_builder_relay_only() {

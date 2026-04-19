@@ -1,18 +1,26 @@
 [package]
-name = "vernesoft"
+name = "nautilus"
 version = "0.4.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Official Rust SDK for the Verne Nautilus platform"
 license = "MIT"
+documentation = "https://docs.rs/nautilus"
+repository = "https://github.com/Verne-Software/nautilus-rs"
+keywords = ["nautilus", "webhook", "relay", "auth", "gate"]
+categories = ["api-bindings", "web-programming::http-client"]
+
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.13.2", default-features = false, features = ["json", "rustls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["time"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["rt", "macros"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 mockito = "1"

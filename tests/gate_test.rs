@@ -1,5 +1,5 @@
 use mockito::Server;
-use vernesoft::{
+use nautilus::{
     AuthorizeParams, CreateIdentityParams, CreateTokenParams, Gate, IdentityTraitsInput,
     JsonPatchOp,
 };
@@ -241,7 +241,7 @@ async fn test_gate_api_error() {
     let err = gate.identities().get("idn_notfound").await.unwrap_err();
 
     match err {
-        vernesoft::Error::Api(e) => {
+        nautilus::Error::Api(e) => {
             assert_eq!(e.code, "not_found");
             assert_eq!(e.status, 404);
         }
