@@ -1,7 +1,7 @@
 # Verne Software Rust SDK
 
-[![Crates.io](https://img.shields.io/crates/v/vernesoft.svg)](https://crates.io/crates/vernesoft)
-[![docs.rs](https://img.shields.io/docsrs/vernesoft)](https://docs.rs/vernesoft)
+[![Crates.io](https://img.shields.io/crates/v/nautilus.svg)](https://crates.io/crates/nautilus)
+[![docs.rs](https://img.shields.io/docsrs/nautilus)](https://docs.rs/nautilus)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](#)
 
@@ -17,16 +17,16 @@ Rust 1.75 or later.
 
 ```toml
 [dependencies]
-vernesoft = "0.1"
+nautilus = "0.4"
 ```
 
 ## Quick Start
 
 ```rust
-use vernesoft::Verne;
+use nautilus::Verne;
 
 #[tokio::main]
-async fn main() -> Result<(), vernesoft::Error> {
+async fn main() -> Result<(), nautilus::Error> {
     let verne = Verne::builder()
         .relay(std::env::var("VERNE_RELAY_KEY").unwrap())
         .gate(std::env::var("VERNE_GATE_KEY").unwrap())
@@ -39,7 +39,7 @@ async fn main() -> Result<(), vernesoft::Error> {
 You can also instantiate services independently if you only need one:
 
 ```rust
-use vernesoft::{Relay, Gate};
+use nautilus::{Relay, Gate};
 
 let relay = Relay::new("vrn_relay_live_sk_...");
 let gate  = Gate::new("vrn_gate_live_sk_...");
@@ -50,7 +50,7 @@ let gate  = Gate::new("vrn_gate_live_sk_...");
 Send events to all subscribed endpoints:
 
 ```rust
-verne.relay()?.messages().send(vernesoft::SendMessageParams {
+verne.relay()?.messages().send(nautilus::SendMessageParams {
     event_type: "user.created".into(),
     payload: serde_json::json!({ "id": "usr_123" }),
     ..Default::default()
@@ -60,7 +60,7 @@ verne.relay()?.messages().send(vernesoft::SendMessageParams {
 Optional parameters:
 
 ```rust
-verne.relay()?.messages().send(vernesoft::SendMessageParams {
+verne.relay()?.messages().send(nautilus::SendMessageParams {
     event_type: "order.placed".into(),
     payload: serde_json::json!({ "order_id": "999" }),
     idempotency_key: Some("evt_abc".into()), // prevent duplicate delivery within 24h
@@ -71,7 +71,7 @@ verne.relay()?.messages().send(vernesoft::SendMessageParams {
 List previously sent events:
 
 ```rust
-let page = verne.relay()?.messages().list(vernesoft::ListMessagesParams {
+let page = verne.relay()?.messages().list(nautilus::ListMessagesParams {
     limit: Some(20),
     event_type: Some("user.created".into()),
     cursor: None,
@@ -90,9 +90,9 @@ Manage your end-users. The `tenant_id` is automatically scoped to your API key.
 
 ```rust
 // Create a user
-let identity = verne.gate()?.identities().create(vernesoft::CreateIdentityParams {
+let identity = verne.gate()?.identities().create(nautilus::CreateIdentityParams {
     schema_id: "user".into(),
-    traits: vernesoft::IdentityTraitsInput {
+    traits: nautilus::IdentityTraitsInput {
         email: "user@example.com".into(),
         custom_data: Some(serde_json::json!({ "role": "editor" })),
     },
@@ -107,7 +107,7 @@ verne.gate()?.identities().get(&identity.id).await?;
 
 // Update a user (JSON Patch — RFC 6902)
 verne.gate()?.identities().patch(&identity.id, vec![
-    vernesoft::JsonPatchOp {
+    nautilus::JsonPatchOp {
         op: "replace".into(),
         path: "/traits/custom_data/role".into(),
         value: Some(serde_json::json!("admin")),
@@ -124,7 +124,7 @@ verne.gate()?.identities().delete(&identity.id).await?;
 Exchange your long-lived API key for a short-lived access token:
 
 ```rust
-let token = verne.gate()?.tokens().create(vernesoft::CreateTokenParams {
+let token = verne.gate()?.tokens().create(nautilus::CreateTokenParams {
     subject: "usr_123".into(),
     scopes: Some(vec!["gate.tokens.read".into()]), // optional
     ttl_seconds: Some(3600),                       // optional, default 3600, max 86400
@@ -149,7 +149,7 @@ if !info.active {
 Check whether a subject is allowed to perform an action:
 
 ```rust
-let decision = verne.gate()?.authorize(vernesoft::AuthorizeParams {
+let decision = verne.gate()?.authorize(nautilus::AuthorizeParams {
     subject: "usr_123".into(),
     action: "relay.messages.read".into(),
     resource: "tenant:ten_001".into(),
@@ -163,10 +163,10 @@ if !decision.allowed {
 
 ## Error Handling
 
-All errors are returned as `vernesoft::Error`:
+All errors are returned as `nautilus::Error`:
 
 ```rust
-use vernesoft::Error;
+use nautilus::Error;
 
 match verne.relay()?.messages().send(params).await {
     Ok(msg) => println!("{}", msg.id),
