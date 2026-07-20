@@ -117,6 +117,30 @@ verne.gate()?.identities().patch(&identity.id, vec![
 
 // Delete a user
 verne.gate()?.identities().delete(&identity.id).await?;
+
+// Activate / deactivate a user (an inactive user cannot log in)
+verne.gate()?.identities().deactivate(&identity.id).await?;
+verne.gate()?.identities().activate(&identity.id).await?;
+// …or set the state explicitly:
+verne.gate()?.identities().set_state(&identity.id, "inactive").await?;
+
+// Resend the email verification link
+verne.gate()?.identities().resend_verification(&identity.id).await?;
+```
+
+### Security Settings
+
+Read or replace the tenant's security settings (passwordless login, TOTP MFA):
+
+```rust
+let security = verne.gate()?.settings().get_security().await?;
+// security.passwordless_enabled, security.mfa_enabled
+
+// Both fields are always sent — the update is a full replacement, not a merge.
+verne.gate()?.settings().update_security(nautilus::SecuritySettings {
+    passwordless_enabled: true,
+    mfa_enabled: false,
+}).await?;
 ```
 
 ### Access Tokens

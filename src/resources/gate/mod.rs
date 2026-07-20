@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{error::Error, http::HttpClient};
 use types::{
     AccessToken, AuthorizationDecision, AuthorizeParams, CreateIdentityParams, CreateTokenParams,
-    Identity, JsonPatchOp, TokenInfo,
+    Identity, JsonPatchOp, SecuritySettings, TokenInfo,
 };
 
 /// Gate service client — Auth-as-a-Service.
@@ -76,6 +76,13 @@ impl Gate {
         TokensClient {
             http: Arc::clone(&self.http),
             api_key: self.api_key.clone(),
+        }
+    }
+
+    /// Return a [`SettingsClient`] for reading and updating tenant settings.
+    pub fn settings(&self) -> SettingsClient {
+        SettingsClient {
+            http: Arc::clone(&self.http),
         }
     }
 
@@ -203,6 +210,52 @@ impl IdentitiesClient {
             .delete(&format!("/v1/gate/identities/{identity_id}"))
             .await
     }
+
+    /// Activate or deactivate an identity.
+    ///
+    /// An `"inactive"` identity cannot log in — Kratos rejects its credentials
+    /// automatically — until it is reactivated. The identity is not deleted.
+    /// Fires the `identity.state_changed` webhook event.
+    ///
+    /// Maps to `PATCH /v1/gate/identities/{id}/state`. `state` must be
+    /// `"active"` or `"inactive"`.
+    pub async fn set_state(&self, identity_id: &str, state: &str) -> Result<Identity, Error> {
+        #[derive(serde::Serialize)]
+        struct StateBody<'a> {
+            state: &'a str,
+        }
+
+        self.http
+            .patch(
+                &format!("/v1/gate/identities/{identity_id}/state"),
+                &StateBody { state },
+            )
+            .await
+    }
+
+    /// Activate an identity — convenience wrapper for [`set_state`](Self::set_state)
+    /// with `"active"`.
+    pub async fn activate(&self, identity_id: &str) -> Result<Identity, Error> {
+        self.set_state(identity_id, "active").await
+    }
+
+    /// Deactivate an identity — convenience wrapper for [`set_state`](Self::set_state)
+    /// with `"inactive"`.
+    pub async fn deactivate(&self, identity_id: &str) -> Result<Identity, Error> {
+        self.set_state(identity_id, "inactive").await
+    }
+
+    /// Trigger a new email verification flow for an identity.
+    ///
+    /// Useful when the original verification email expired or was never
+    /// received; the user receives a fresh verification email.
+    ///
+    /// Maps to `POST /v1/gate/identities/{id}/resend-verification`.
+    pub async fn resend_verification(&self, identity_id: &str) -> Result<(), Error> {
+        self.http
+            .post_discard(&format!("/v1/gate/identities/{identity_id}/resend-verification"))
+            .await
+    }
 }
 
 /// Access to the `/v1/gate/tokens` endpoints.
@@ -287,6 +340,47 @@ impl TokensClient {
                 &IntrospectBody { access_token },
                 false,
             )
+            .await
+    }
+}
+
+/// Access to the `/v1/gate/settings` endpoints.
+///
+/// Obtain via [`Gate::settings`].
+pub struct SettingsClient {
+    http: Arc<HttpClient>,
+}
+
+impl SettingsClient {
+    /// Fetch the tenant's security settings (passwordless / MFA).
+    ///
+    /// Maps to `GET /v1/gate/settings/security`.
+    pub async fn get_security(&self) -> Result<SecuritySettings, Error> {
+        self.http.get("/v1/gate/settings/security").await
+    }
+
+    /// Replace the tenant's security settings.
+    ///
+    /// Both fields are always sent — the update is a full replacement, not a
+    /// merge. Maps to `PUT /v1/gate/settings/security`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nautilus::{Gate, SecuritySettings};
+    ///
+    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// let gate = Gate::new("vrn_gate_live_sk_…");
+    /// gate.settings().update_security(SecuritySettings {
+    ///     passwordless_enabled: true,
+    ///     mfa_enabled: false,
+    /// }).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn update_security(&self, settings: SecuritySettings) -> Result<(), Error> {
+        self.http
+            .put_discard("/v1/gate/settings/security", &settings)
             .await
     }
 }

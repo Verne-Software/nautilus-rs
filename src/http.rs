@@ -120,6 +120,41 @@ impl HttpClient {
         self.parse_response(resp).await
     }
 
+    /// Send a `PUT` request, discarding the (successful) response body.
+    ///
+    /// Used by endpoints that reply with a bare `{"status":"ok"}` acknowledgement.
+    pub async fn put_discard<B: Serialize>(&self, path: &str, body: &B) -> Result<(), Error> {
+        let url = format!("{}{}", self.base_url, path);
+        let resp = self
+            .client
+            .put(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .map_err(Error::Http)?;
+
+        self.check_empty(resp).await
+    }
+
+    /// Send a bodyless `POST` request, discarding the (successful) response body.
+    ///
+    /// Used by action endpoints that reply with `204 No Content`.
+    pub async fn post_discard(&self, path: &str) -> Result<(), Error> {
+        let url = format!("{}{}", self.base_url, path);
+        let resp = self
+            .client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .send()
+            .await
+            .map_err(Error::Http)?;
+
+        self.check_empty(resp).await
+    }
+
     pub async fn delete(&self, path: &str) -> Result<(), Error> {
         let url = format!("{}{}", self.base_url, path);
         let resp = self
@@ -131,22 +166,24 @@ impl HttpClient {
             .await
             .map_err(Error::Http)?;
 
+        self.check_empty(resp).await
+    }
+
+    /// Validate a response status without deserializing the body — for endpoints
+    /// that return no meaningful content (`204`, `{"status":"ok"}`, …).
+    async fn check_empty(&self, resp: reqwest::Response) -> Result<(), Error> {
         let status = resp.status();
-        if status.as_u16() == 204 {
+        if status.is_success() {
             return Ok(());
         }
 
-        if !status.is_success() {
-            let env: ErrorEnvelope = resp.json().await.map_err(Error::Http)?;
-            return Err(Error::Api(ApiError {
-                code: env.error.code,
-                message: env.error.message,
-                status: status.as_u16(),
-                request_id: env.error.request_id,
-            }));
-        }
-
-        Ok(())
+        let env: ErrorEnvelope = resp.json().await.map_err(Error::Http)?;
+        Err(Error::Api(ApiError {
+            code: env.error.code,
+            message: env.error.message,
+            status: status.as_u16(),
+            request_id: env.error.request_id,
+        }))
     }
 
     async fn parse_response<T: DeserializeOwned>(

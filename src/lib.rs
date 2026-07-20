@@ -95,6 +95,6 @@ pub use resources::relay::{MessagesClient, Relay, RelayBuilder};
 
 pub use resources::gate::types::{
     AccessToken, AuthorizationDecision, AuthorizeParams, CreateIdentityParams, CreateTokenParams,
-    Identity, IdentityTraits, IdentityTraitsInput, JsonPatchOp, TokenInfo,
+    Identity, IdentityTraits, IdentityTraitsInput, JsonPatchOp, SecuritySettings, TokenInfo,
 };
-pub use resources::gate::{Gate, GateBuilder, IdentitiesClient, TokensClient};
+pub use resources::gate::{Gate, GateBuilder, IdentitiesClient, SettingsClient, TokensClient};

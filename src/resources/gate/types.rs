@@ -109,6 +109,21 @@ pub struct JsonPatchOp {
     pub from: Option<String>,
 }
 
+/// Security-related Gate Identity settings for a tenant.
+///
+/// Used both as the return value of
+/// [`SettingsClient::get_security`](super::SettingsClient::get_security) and as
+/// the input to
+/// [`SettingsClient::update_security`](super::SettingsClient::update_security).
+/// Updates are a full replacement — both fields are always sent.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SecuritySettings {
+    /// Whether email-OTP (passwordless) login is enabled.
+    pub passwordless_enabled: bool,
+    /// Whether TOTP two-factor authentication is enabled.
+    pub mfa_enabled: bool,
+}
+
 /// A short-lived access token issued by Gate.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct AccessToken {
