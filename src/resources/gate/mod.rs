@@ -5,7 +5,7 @@ use std::sync::Arc;
 use crate::{error::Error, http::HttpClient};
 use types::{
     AccessToken, AuthorizationDecision, AuthorizeParams, CreateIdentityParams, CreateTokenParams,
-    Identity, JsonPatchOp, SecuritySettings, TokenInfo,
+    Identity, JsonPatchOp, OidcProvider, SecuritySettings, TokenInfo,
 };
 
 /// Gate service client — Auth-as-a-Service.
@@ -109,6 +109,50 @@ impl Gate {
     /// ```
     pub async fn authorize(&self, params: AuthorizeParams) -> Result<AuthorizationDecision, Error> {
         self.http.post("/v1/gate/authorize", &params, false).await
+    }
+
+    /// List the social login providers currently enabled for a tenant.
+    ///
+    /// This is a **public, unauthenticated** endpoint — call it from your
+    /// login / registration page to decide which social buttons to render.
+    /// Maps to `GET /public/gate/providers/{tenant_id}`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nautilus::Gate;
+    ///
+    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// let gate = Gate::new("vrn_gate_live_sk_…");
+    /// let providers = gate.get_enabled_providers("ten_001").await?;
+    /// // → ["github", "google"]
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn get_enabled_providers(&self, tenant_id: &str) -> Result<Vec<String>, Error> {
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            providers: Vec<String>,
+        }
+
+        let wrapped: Wrapper = self
+            .http
+            .get(&format!("/public/gate/providers/{tenant_id}"))
+            .await?;
+        Ok(wrapped.providers)
+    }
+
+    /// Initialize a Kratos login flow using your Gate API key.
+    ///
+    /// Call this from your server and pass the returned flow JSON to your
+    /// browser-side code to render social login buttons. The flow already
+    /// contains only the providers your tenant has enabled. Maps to
+    /// `GET /v1/gate/auth/login`.
+    ///
+    /// The response mirrors the raw Ory Kratos flow JSON, so it is returned as
+    /// an untyped [`serde_json::Value`].
+    pub async fn create_login_flow(&self) -> Result<serde_json::Value, Error> {
+        self.http.get("/v1/gate/auth/login").await
     }
 }
 
@@ -382,5 +426,60 @@ impl SettingsClient {
         self.http
             .put_discard("/v1/gate/settings/security", &settings)
             .await
+    }
+
+    /// List the tenant's social login (OIDC) providers and whether each is
+    /// enabled — covering every provider Gate supports, regardless of state.
+    ///
+    /// Maps to `GET /v1/gate/settings/oidc-providers`.
+    pub async fn get_oidc_providers(&self) -> Result<Vec<OidcProvider>, Error> {
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            providers: Vec<OidcProvider>,
+        }
+
+        let wrapped: Wrapper = self.http.get("/v1/gate/settings/oidc-providers").await?;
+        Ok(wrapped.providers)
+    }
+
+    /// Set the `enabled` flag for one or more social login providers.
+    ///
+    /// Any provider omitted from `providers` is left unchanged. Returns the
+    /// full, updated provider list. Maps to
+    /// `PUT /v1/gate/settings/oidc-providers`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nautilus::{Gate, OidcProvider};
+    ///
+    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// let gate = Gate::new("vrn_gate_live_sk_…");
+    /// let providers = gate.settings().update_oidc_providers(vec![
+    ///     OidcProvider { provider: "github".into(), enabled: true },
+    ///     OidcProvider { provider: "google".into(), enabled: true },
+    /// ]).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn update_oidc_providers(
+        &self,
+        providers: Vec<OidcProvider>,
+    ) -> Result<Vec<OidcProvider>, Error> {
+        #[derive(serde::Serialize)]
+        struct Body {
+            providers: Vec<OidcProvider>,
+        }
+
+        #[derive(serde::Deserialize)]
+        struct Wrapper {
+            providers: Vec<OidcProvider>,
+        }
+
+        let wrapped: Wrapper = self
+            .http
+            .put("/v1/gate/settings/oidc-providers", &Body { providers })
+            .await?;
+        Ok(wrapped.providers)
     }
 }

@@ -12,7 +12,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! nautilus = "0.4"
+//! nautilus = "1.1"
 //! tokio = { version = "1", features = ["full"] }
 //! ```
 //!
@@ -95,6 +95,7 @@ pub use resources::relay::{MessagesClient, Relay, RelayBuilder};
 
 pub use resources::gate::types::{
     AccessToken, AuthorizationDecision, AuthorizeParams, CreateIdentityParams, CreateTokenParams,
-    Identity, IdentityTraits, IdentityTraitsInput, JsonPatchOp, SecuritySettings, TokenInfo,
+    Identity, IdentityTraits, IdentityTraitsInput, JsonPatchOp, OidcProvider, SecuritySettings,
+    TokenInfo,
 };
 pub use resources::gate::{Gate, GateBuilder, IdentitiesClient, SettingsClient, TokensClient};

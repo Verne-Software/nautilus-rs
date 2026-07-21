@@ -120,6 +120,26 @@ impl HttpClient {
         self.parse_response(resp).await
     }
 
+    /// Send a `PUT` request and deserialize the JSON response body.
+    pub async fn put<B: Serialize, T: DeserializeOwned>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T, Error> {
+        let url = format!("{}{}", self.base_url, path);
+        let resp = self
+            .client
+            .put(&url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .header("Content-Type", "application/json")
+            .json(body)
+            .send()
+            .await
+            .map_err(Error::Http)?;
+
+        self.parse_response(resp).await
+    }
+
     /// Send a `PUT` request, discarding the (successful) response body.
     ///
     /// Used by endpoints that reply with a bare `{"status":"ok"}` acknowledgement.

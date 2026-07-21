@@ -124,6 +124,21 @@ pub struct SecuritySettings {
     pub mfa_enabled: bool,
 }
 
+/// A social login (OAuth 2.0 / OIDC) provider and whether it is enabled for a
+/// tenant's end-users.
+///
+/// Used both as an element of the list returned by
+/// [`SettingsClient::get_oidc_providers`](super::SettingsClient::get_oidc_providers)
+/// and as input to
+/// [`SettingsClient::update_oidc_providers`](super::SettingsClient::update_oidc_providers).
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct OidcProvider {
+    /// Provider identifier, e.g. `"github"`, `"google"`, `"gitlab"`.
+    pub provider: String,
+    /// Whether the provider appears in the tenant's login/registration UI.
+    pub enabled: bool,
+}
+
 /// A short-lived access token issued by Gate.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct AccessToken {

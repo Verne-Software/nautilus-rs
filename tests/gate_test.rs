@@ -1,7 +1,7 @@
 use mockito::Server;
 use nautilus::{
     AuthorizeParams, CreateIdentityParams, CreateTokenParams, Gate, IdentityTraitsInput,
-    JsonPatchOp, SecuritySettings,
+    JsonPatchOp, OidcProvider, SecuritySettings,
 };
 
 fn identity_json(id: &str) -> String {
@@ -255,6 +255,117 @@ async fn test_update_security_settings() {
         })
         .await
         .unwrap();
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_oidc_providers() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/v1/gate/settings/oidc-providers")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            r#"{"providers":[{"provider":"github","enabled":true},{"provider":"google","enabled":false}]}"#,
+        )
+        .create_async()
+        .await;
+
+    let gate = Gate::builder()
+        .api_key("vrn_gate_test_sk_abc")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let providers = gate.settings().get_oidc_providers().await.unwrap();
+
+    assert_eq!(providers.len(), 2);
+    assert_eq!(providers[0].provider, "github");
+    assert!(providers[0].enabled);
+    assert_eq!(providers[1].provider, "google");
+    assert!(!providers[1].enabled);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_update_oidc_providers() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("PUT", "/v1/gate/settings/oidc-providers")
+        .match_body(r#"{"providers":[{"provider":"github","enabled":true}]}"#)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"providers":[{"provider":"github","enabled":true}]}"#)
+        .create_async()
+        .await;
+
+    let gate = Gate::builder()
+        .api_key("vrn_gate_test_sk_abc")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let providers = gate
+        .settings()
+        .update_oidc_providers(vec![OidcProvider {
+            provider: "github".into(),
+            enabled: true,
+        }])
+        .await
+        .unwrap();
+
+    assert_eq!(providers.len(), 1);
+    assert_eq!(providers[0].provider, "github");
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_get_enabled_providers() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/public/gate/providers/ten_001")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"providers":["github","google"]}"#)
+        .create_async()
+        .await;
+
+    let gate = Gate::builder()
+        .api_key("vrn_gate_test_sk_abc")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let providers = gate.get_enabled_providers("ten_001").await.unwrap();
+
+    assert_eq!(providers, vec!["github".to_string(), "google".to_string()]);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_create_login_flow() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/v1/gate/auth/login")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"flow_1","ui":{"action":"https://api.vernesoft.com/auth/x","nodes":[]}}"#)
+        .create_async()
+        .await;
+
+    let gate = Gate::builder()
+        .api_key("vrn_gate_test_sk_abc")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let flow = gate.create_login_flow().await.unwrap();
+
+    assert_eq!(flow["id"], "flow_1");
     mock.assert_async().await;
 }
 
