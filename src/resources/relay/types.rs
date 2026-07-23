@@ -16,10 +16,10 @@ pub struct Message {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::{Relay, SendMessageParams};
+/// use nautilus_rs::{Relay, SendMessageParams};
 /// use serde_json::json;
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let relay = Relay::new("vrn_relay_live_sk_…");
 /// let msg = relay.messages().send(SendMessageParams {
 ///     event_type: "order.placed".into(),

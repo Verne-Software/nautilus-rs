@@ -1,5 +1,5 @@
 use mockito::Server;
-use nautilus::{ListMessagesParams, Relay, SendMessageParams};
+use nautilus_rs::{ListMessagesParams, Relay, SendMessageParams};
 
 #[tokio::test]
 async fn test_send_message() {
@@ -131,7 +131,7 @@ async fn test_send_message_api_error() {
         .unwrap_err();
 
     match err {
-        nautilus::Error::Api(e) => {
+        nautilus_rs::Error::Api(e) => {
             assert_eq!(e.code, "invalid_payload");
             assert_eq!(e.status, 400);
             assert_eq!(e.request_id, "req_abc123");

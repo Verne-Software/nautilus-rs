@@ -12,18 +12,18 @@
 //!
 //! ```toml
 //! [dependencies]
-//! nautilus = "1.1"
+//! nautilus-rs = "1.1"
 //! tokio = { version = "1", features = ["full"] }
 //! ```
 //!
 //! ## Using both services together
 //!
 //! ```no_run
-//! use nautilus::{Verne, SendMessageParams};
+//! use nautilus_rs::{Verne, SendMessageParams};
 //! use serde_json::json;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), nautilus::Error> {
+//! async fn main() -> Result<(), nautilus_rs::Error> {
 //!     let verne = Verne::builder()
 //!         .relay("vrn_relay_live_sk_…")
 //!         .gate("vrn_gate_live_sk_…")
@@ -46,7 +46,7 @@
 //! You can also instantiate [`Relay`] or [`Gate`] on their own:
 //!
 //! ```no_run
-//! use nautilus::Relay;
+//! use nautilus_rs::Relay;
 //!
 //! let relay = Relay::new("vrn_relay_live_sk_…");
 //! ```
@@ -57,7 +57,7 @@
 //! handle specific failure modes:
 //!
 //! ```no_run
-//! use nautilus::{Error, Relay, SendMessageParams};
+//! use nautilus_rs::{Error, Relay, SendMessageParams};
 //! use serde_json::json;
 //!
 //! # async fn run() {

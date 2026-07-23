@@ -6,9 +6,9 @@
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::{Relay, ListMessagesParams, Paginated, Message};
+/// use nautilus_rs::{Relay, ListMessagesParams, Paginated, Message};
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let relay = Relay::new("vrn_relay_live_sk_…");
 /// let mut cursor: Option<String> = None;
 ///

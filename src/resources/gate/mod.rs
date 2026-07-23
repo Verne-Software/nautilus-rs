@@ -18,12 +18,12 @@ use types::{
 ///
 /// ```no_run
 /// // Standalone
-/// use nautilus::Gate;
+/// use nautilus_rs::Gate;
 /// let gate = Gate::new("vrn_gate_live_sk_…");
 ///
 /// // Via unified client
-/// use nautilus::Verne;
-/// # fn run() -> Result<(), nautilus::Error> {
+/// use nautilus_rs::Verne;
+/// # fn run() -> Result<(), nautilus_rs::Error> {
 /// let verne = Verne::builder().gate("vrn_gate_live_sk_…").build()?;
 /// let gate = verne.gate()?;
 /// # Ok(())
@@ -93,9 +93,9 @@ impl Gate {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Gate, AuthorizeParams};
+    /// use nautilus_rs::{Gate, AuthorizeParams};
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// let decision = gate.authorize(AuthorizeParams {
     ///     subject: "idn_alice".into(),
@@ -120,9 +120,9 @@ impl Gate {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::Gate;
+    /// use nautilus_rs::Gate;
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// let providers = gate.get_enabled_providers("ten_001").await?;
     /// // → ["github", "google"]
@@ -161,7 +161,7 @@ impl Gate {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::Gate;
+/// use nautilus_rs::Gate;
 ///
 /// let gate = Gate::builder()
 ///     .api_key("vrn_gate_live_sk_…")
@@ -319,9 +319,9 @@ impl TokensClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Gate, CreateTokenParams};
+    /// use nautilus_rs::{Gate, CreateTokenParams};
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// let token = gate.tokens().create(CreateTokenParams {
     ///     subject: "idn_alice".into(),
@@ -361,9 +361,9 @@ impl TokensClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::Gate;
+    /// use nautilus_rs::Gate;
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// let info = gate.tokens().introspect("eyJ…").await?;
     /// if info.active {
@@ -411,9 +411,9 @@ impl SettingsClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Gate, SecuritySettings};
+    /// use nautilus_rs::{Gate, SecuritySettings};
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// gate.settings().update_security(SecuritySettings {
     ///     passwordless_enabled: true,
@@ -451,9 +451,9 @@ impl SettingsClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Gate, OidcProvider};
+    /// use nautilus_rs::{Gate, OidcProvider};
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let gate = Gate::new("vrn_gate_live_sk_…");
     /// let providers = gate.settings().update_oidc_providers(vec![
     ///     OidcProvider { provider: "github".into(), enabled: true },

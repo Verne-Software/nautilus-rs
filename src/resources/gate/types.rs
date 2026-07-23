@@ -41,9 +41,9 @@ pub struct IdentityTraitsInput {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::{Gate, CreateIdentityParams, IdentityTraitsInput};
+/// use nautilus_rs::{Gate, CreateIdentityParams, IdentityTraitsInput};
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let gate = Gate::new("vrn_gate_live_sk_…");
 /// let identity = gate.identities().create(CreateIdentityParams {
 ///     schema_id: "default".into(),
@@ -80,10 +80,10 @@ pub struct CreateIdentityParams {
 /// # Example — update an email address
 ///
 /// ```no_run
-/// use nautilus::{Gate, JsonPatchOp};
+/// use nautilus_rs::{Gate, JsonPatchOp};
 /// use serde_json::json;
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let gate = Gate::new("vrn_gate_live_sk_…");
 /// gate.identities().patch("idn_…", vec![JsonPatchOp {
 ///     op: "replace".into(),
@@ -157,9 +157,9 @@ pub struct AccessToken {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::{Gate, CreateTokenParams};
+/// use nautilus_rs::{Gate, CreateTokenParams};
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let gate = Gate::new("vrn_gate_live_sk_…");
 /// let token = gate.tokens().create(CreateTokenParams {
 ///     subject: "idn_alice".into(),
@@ -204,9 +204,9 @@ pub struct TokenInfo {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::{Gate, AuthorizeParams};
+/// use nautilus_rs::{Gate, AuthorizeParams};
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let gate = Gate::new("vrn_gate_live_sk_…");
 /// let decision = gate.authorize(AuthorizeParams {
 ///     subject: "idn_alice".into(),

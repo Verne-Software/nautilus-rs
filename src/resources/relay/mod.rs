@@ -15,12 +15,12 @@ use types::{ListMessagesParams, Message, SendMessageParams};
 ///
 /// ```no_run
 /// // Standalone
-/// use nautilus::Relay;
+/// use nautilus_rs::Relay;
 /// let relay = Relay::new("vrn_relay_live_sk_…");
 ///
 /// // Via unified client
-/// use nautilus::Verne;
-/// # fn run() -> Result<(), nautilus::Error> {
+/// use nautilus_rs::Verne;
+/// # fn run() -> Result<(), nautilus_rs::Error> {
 /// let verne = Verne::builder().relay("vrn_relay_live_sk_…").build()?;
 /// let relay = verne.relay()?;
 /// # Ok(())
@@ -72,7 +72,7 @@ impl Relay {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::Relay;
+/// use nautilus_rs::Relay;
 ///
 /// let relay = Relay::builder()
 ///     .api_key("vrn_relay_live_sk_…")
@@ -137,10 +137,10 @@ impl MessagesClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Relay, SendMessageParams};
+    /// use nautilus_rs::{Relay, SendMessageParams};
     /// use serde_json::json;
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let relay = Relay::new("vrn_relay_live_sk_…");
     /// let msg = relay.messages().send(SendMessageParams {
     ///     event_type: "user.signed_up".into(),
@@ -162,9 +162,9 @@ impl MessagesClient {
     /// # Example
     ///
     /// ```no_run
-    /// use nautilus::{Relay, ListMessagesParams};
+    /// use nautilus_rs::{Relay, ListMessagesParams};
     ///
-    /// # async fn run() -> Result<(), nautilus::Error> {
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
     /// let relay = Relay::new("vrn_relay_live_sk_…");
     /// let page = relay.messages().list(ListMessagesParams {
     ///     limit: Some(20),

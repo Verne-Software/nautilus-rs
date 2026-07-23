@@ -1,5 +1,5 @@
 use mockito::Server;
-use nautilus::{
+use nautilus_rs::{
     AuthorizeParams, CreateIdentityParams, CreateTokenParams, Gate, IdentityTraitsInput,
     JsonPatchOp, OidcProvider, SecuritySettings,
 };
@@ -483,7 +483,7 @@ async fn test_gate_api_error() {
     let err = gate.identities().get("idn_notfound").await.unwrap_err();
 
     match err {
-        nautilus::Error::Api(e) => {
+        nautilus_rs::Error::Api(e) => {
             assert_eq!(e.code, "not_found");
             assert_eq!(e.status, 404);
         }

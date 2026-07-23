@@ -17,7 +17,7 @@ use crate::{
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::Verne;
+/// use nautilus_rs::Verne;
 ///
 /// let verne = Verne::builder()
 ///     .relay("vrn_relay_live_sk_…")
@@ -95,9 +95,9 @@ impl VerneBuilder {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus::Verne;
+/// use nautilus_rs::Verne;
 ///
-/// # async fn run() -> Result<(), nautilus::Error> {
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let verne = Verne::builder()
 ///     .relay("vrn_relay_live_sk_…")
 ///     .gate("vrn_gate_live_sk_…")

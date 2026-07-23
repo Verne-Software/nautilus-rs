@@ -1,11 +1,11 @@
 [package]
-name = "nautilus"
+name = "nautilus-rs"
 version = "1.1.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Official Rust SDK for the Verne Nautilus platform"
 license = "MIT"
-documentation = "https://docs.rs/nautilus"
+documentation = "https://docs.rs/nautilus-rs"
 repository = "https://github.com/Verne-Software/nautilus-rs"
 keywords = ["nautilus", "webhook", "relay", "auth", "gate"]
 categories = ["api-bindings", "web-programming::http-client"]
