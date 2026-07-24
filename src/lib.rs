@@ -5,6 +5,8 @@
 //! - **[Relay]** — Webhooks-as-a-Service: deliver events to subscribed HTTP endpoints.
 //! - **[Gate]** — Auth-as-a-Service: manage identities, issue short-lived access tokens,
 //!   and enforce authorization policies.
+//! - **[Passepartout]** — Telegram Auth-as-a-Service: sign users in with Telegram and
+//!   introspect the access tokens it issues.
 //!
 //! # Quick start
 //!
@@ -12,7 +14,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! nautilus-rs = "1.1"
+//! nautilus-rs = "1.2"
 //! tokio = { version = "1", features = ["full"] }
 //! ```
 //!
@@ -99,3 +101,8 @@ pub use resources::gate::types::{
     TokenInfo,
 };
 pub use resources::gate::{Gate, GateBuilder, IdentitiesClient, SettingsClient, TokensClient};
+
+pub use resources::passepartout::types::{
+    LoginStart, LoginStatus, TelegramUser, TokenIntrospection,
+};
+pub use resources::passepartout::{Passepartout, PassepartoutBuilder};

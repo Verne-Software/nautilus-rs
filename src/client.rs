@@ -3,16 +3,16 @@ use std::sync::Arc;
 use crate::{
     error::Error,
     http::HttpClient,
-    resources::{gate::Gate, relay::Relay},
+    resources::{gate::Gate, passepartout::Passepartout, relay::Relay},
 };
 
 /// Builder for the unified [`Verne`] client.
 ///
 /// Obtain one via [`Verne::builder()`]. All setter methods are chainable. At
-/// least one of [`relay`](VerneBuilder::relay) or [`gate`](VerneBuilder::gate)
-/// must be set; calling [`build`](VerneBuilder::build) with neither is valid
-/// but the resulting client will return [`Error::Config`] for every service
-/// accessor.
+/// least one of [`relay`](VerneBuilder::relay), [`gate`](VerneBuilder::gate),
+/// or [`passepartout`](VerneBuilder::passepartout) must be set; calling
+/// [`build`](VerneBuilder::build) with none is valid but the resulting client
+/// will return [`Error::Config`] for every service accessor.
 ///
 /// # Example
 ///
@@ -30,6 +30,7 @@ use crate::{
 pub struct VerneBuilder {
     relay_key: Option<String>,
     gate_key: Option<String>,
+    passepartout_key: Option<String>,
     base_url: Option<String>,
     timeout_secs: Option<u64>,
 }
@@ -44,6 +45,12 @@ impl VerneBuilder {
     /// Set the Gate service API key (`vrn_gate_<env>_sk_…`).
     pub fn gate(mut self, key: impl Into<String>) -> Self {
         self.gate_key = Some(key.into());
+        self
+    }
+
+    /// Set the Passepartout service API key (`vrn_passepartout_<env>_sk_…`).
+    pub fn passepartout(mut self, key: impl Into<String>) -> Self {
+        self.passepartout_key = Some(key.into());
         self
     }
 
@@ -83,7 +90,19 @@ impl VerneBuilder {
             })
             .transpose()?;
 
-        Ok(Verne { relay, gate })
+        let passepartout = self
+            .passepartout_key
+            .map(|key| {
+                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
+                Ok::<_, Error>(Arc::new(Passepartout::from_http(Arc::new(http), key)))
+            })
+            .transpose()?;
+
+        Ok(Verne {
+            relay,
+            gate,
+            passepartout,
+        })
     }
 }
 
@@ -111,6 +130,7 @@ impl VerneBuilder {
 pub struct Verne {
     relay: Option<Arc<Relay>>,
     gate: Option<Arc<Gate>>,
+    passepartout: Option<Arc<Passepartout>>,
 }
 
 impl Verne {
@@ -141,5 +161,17 @@ impl Verne {
         self.gate
             .as_deref()
             .ok_or_else(|| Error::Config("no gate API key configured".into()))
+    }
+
+    /// Return a reference to the [`Passepartout`] service.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Config`] if no Passepartout API key was provided at
+    /// build time.
+    pub fn passepartout(&self) -> Result<&Passepartout, Error> {
+        self.passepartout
+            .as_deref()
+            .ok_or_else(|| Error::Config("no passepartout API key configured".into()))
     }
 }
