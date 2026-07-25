@@ -185,6 +185,67 @@ if !decision.allowed {
 }
 ```
 
+## Clockwork — Cron-as-a-Service
+
+Schedule recurring cron jobs and one-off delayed jobs that invoke your HTTP endpoints, and inspect their execution history. List and executions endpoints return a plain `Vec<T>` (no pagination).
+
+### Cron Jobs
+
+```rust
+// Create a recurring job
+let job = verne.clockwork()?.jobs().create(nautilus_rs::CreateCronJobParams {
+    name: "nightly-report".into(),
+    schedule: "0 2 * * *".into(),
+    url: "https://example.com/hooks/report".into(),
+    method: Some("POST".into()),          // optional
+    headers: Some(serde_json::json!({ "X-Token": "abc" })), // optional
+    body: Some("{}".into()),              // optional
+}).await?;
+
+// List all cron jobs
+for job in verne.clockwork()?.jobs().list().await? {
+    println!("{} — {}", job.name, job.schedule);
+}
+
+// Update a job (only the fields you set are changed)
+verne.clockwork()?.jobs().update(&job.id, nautilus_rs::UpdateCronJobParams {
+    schedule: Some("*/15 * * * *".into()),
+    is_active: Some(false),
+    ..Default::default()
+}).await?;
+
+// Inspect execution history
+for exec in verne.clockwork()?.jobs().executions(&job.id).await? {
+    println!("{} — {:?}", exec.status, exec.response_status);
+}
+
+// Delete a job
+verne.clockwork()?.jobs().delete(&job.id).await?;
+```
+
+### Delayed Jobs
+
+```rust
+// Schedule a one-off job
+let job = verne.clockwork()?.delayed().create(nautilus_rs::CreateDelayedJobParams {
+    name: "send-reminder".into(),
+    run_at: "2026-01-01T12:00:00Z".into(),
+    url: "https://example.com/hooks/reminder".into(),
+    ..Default::default()
+}).await?;
+
+// List all delayed jobs
+for job in verne.clockwork()?.delayed().list().await? {
+    println!("{} runs at {}", job.name, job.run_at);
+}
+
+// Inspect execution history
+verne.clockwork()?.delayed().executions(&job.id).await?;
+
+// Cancel a pending job
+verne.clockwork()?.delayed().cancel(&job.id).await?;
+```
+
 ## Error Handling
 
 All errors are returned as `nautilus_rs::Error`:

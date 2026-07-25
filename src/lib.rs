@@ -7,6 +7,8 @@
 //!   and enforce authorization policies.
 //! - **[Passepartout]** — Telegram Auth-as-a-Service: sign users in with Telegram and
 //!   introspect the access tokens it issues.
+//! - **[Clockwork]** — Cron-as-a-Service: schedule recurring cron jobs and one-off delayed
+//!   jobs that invoke your HTTP endpoints, and inspect their execution history.
 //!
 //! # Quick start
 //!
@@ -106,3 +108,9 @@ pub use resources::passepartout::types::{
     LoginStart, LoginStatus, TelegramUser, TokenIntrospection,
 };
 pub use resources::passepartout::{Passepartout, PassepartoutBuilder};
+
+pub use resources::clockwork::types::{
+    CreateCronJobParams, CreateDelayedJobParams, CronJob, DelayedJob, Execution,
+    UpdateCronJobParams,
+};
+pub use resources::clockwork::{Clockwork, ClockworkBuilder, CronJobsClient, DelayedJobsClient};

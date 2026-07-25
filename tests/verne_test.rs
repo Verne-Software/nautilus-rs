@@ -35,6 +35,17 @@ async fn test_builder_both_services() {
 }
 
 #[tokio::test]
+async fn test_builder_clockwork_only() {
+    let verne = Verne::builder()
+        .clockwork("vrn_clockwork_test_sk_abc")
+        .build()
+        .unwrap();
+
+    assert!(verne.clockwork().is_ok());
+    assert!(verne.relay().is_err());
+}
+
+#[tokio::test]
 async fn test_missing_relay_key_returns_config_error() {
     let verne = Verne::builder().build().unwrap();
 
@@ -50,6 +61,17 @@ async fn test_missing_gate_key_returns_config_error() {
     let verne = Verne::builder().build().unwrap();
 
     let err = verne.gate().unwrap_err();
+    match err {
+        Error::Config(msg) => assert!(!msg.is_empty()),
+        other => panic!("expected Error::Config, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn test_missing_clockwork_key_returns_config_error() {
+    let verne = Verne::builder().build().unwrap();
+
+    let err = verne.clockwork().unwrap_err();
     match err {
         Error::Config(msg) => assert!(!msg.is_empty()),
         other => panic!("expected Error::Config, got {other:?}"),

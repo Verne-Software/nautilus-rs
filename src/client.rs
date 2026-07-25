@@ -3,7 +3,7 @@ use std::sync::Arc;
 use crate::{
     error::Error,
     http::HttpClient,
-    resources::{gate::Gate, passepartout::Passepartout, relay::Relay},
+    resources::{clockwork::Clockwork, gate::Gate, passepartout::Passepartout, relay::Relay},
 };
 
 /// Builder for the unified [`Verne`] client.
@@ -31,6 +31,7 @@ pub struct VerneBuilder {
     relay_key: Option<String>,
     gate_key: Option<String>,
     passepartout_key: Option<String>,
+    clockwork_key: Option<String>,
     base_url: Option<String>,
     timeout_secs: Option<u64>,
 }
@@ -51,6 +52,12 @@ impl VerneBuilder {
     /// Set the Passepartout service API key (`vrn_passepartout_<env>_sk_…`).
     pub fn passepartout(mut self, key: impl Into<String>) -> Self {
         self.passepartout_key = Some(key.into());
+        self
+    }
+
+    /// Set the Clockwork service API key (`vrn_clockwork_<env>_sk_…`).
+    pub fn clockwork(mut self, key: impl Into<String>) -> Self {
+        self.clockwork_key = Some(key.into());
         self
     }
 
@@ -98,10 +105,19 @@ impl VerneBuilder {
             })
             .transpose()?;
 
+        let clockwork = self
+            .clockwork_key
+            .map(|key| {
+                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
+                Ok::<_, Error>(Arc::new(Clockwork::from_http(Arc::new(http))))
+            })
+            .transpose()?;
+
         Ok(Verne {
             relay,
             gate,
             passepartout,
+            clockwork,
         })
     }
 }
@@ -131,6 +147,7 @@ pub struct Verne {
     relay: Option<Arc<Relay>>,
     gate: Option<Arc<Gate>>,
     passepartout: Option<Arc<Passepartout>>,
+    clockwork: Option<Arc<Clockwork>>,
 }
 
 impl Verne {
@@ -173,5 +190,17 @@ impl Verne {
         self.passepartout
             .as_deref()
             .ok_or_else(|| Error::Config("no passepartout API key configured".into()))
+    }
+
+    /// Return a reference to the [`Clockwork`] service.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`Error::Config`] if no Clockwork API key was provided at build
+    /// time.
+    pub fn clockwork(&self) -> Result<&Clockwork, Error> {
+        self.clockwork
+            .as_deref()
+            .ok_or_else(|| Error::Config("no clockwork API key configured".into()))
     }
 }
