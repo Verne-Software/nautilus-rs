@@ -132,7 +132,13 @@ pub struct MessagesClient {
 impl MessagesClient {
     /// Send an event to all subscribed endpoints.
     ///
-    /// Maps to `POST /v1/relay/messages`.
+    /// Maps to `POST /v1/relay/messages`. Retried once automatically on a 429,
+    /// respecting `Retry-After`.
+    ///
+    /// Safe to retry beyond that if
+    /// [`idempotency_key`](SendMessageParams::idempotency_key) is set: a repeat
+    /// returns the originally accepted message rather than creating a second
+    /// event or failing.
     ///
     /// # Example
     ///
