@@ -71,7 +71,7 @@
 //!     payload: json!({}),
 //!     ..Default::default()
 //! }).await {
-//!     Ok(msg) => println!("delivered: {}", msg.id),
+//!     Ok(msg) => println!("accepted: {}", msg.id),
 //!     Err(Error::Api(e)) => eprintln!("API {}: {}", e.status, e.message),
 //!     Err(e) => eprintln!("unexpected: {e}"),
 //! }
