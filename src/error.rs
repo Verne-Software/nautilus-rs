@@ -39,11 +39,12 @@ impl From<ApiError> for Error {
 
 /// A structured error returned by the Verne API.
 ///
-/// Returned inside [`Error::Api`] when the server responds with a non-2xx status. The
-/// documented body is `{"error": {"code", "message", "request_id", …}}`, but what arrives is
-/// not always that: Clockwork engine errors are `{"error": "<sentence>"}`, and a few
-/// identity-service bodies carry a numeric `code`. Parsing accepts all of them and never
-/// fails — an unrecognised body gives `code = "unknown"` and `message = "HTTP <status>"`.
+/// Returned inside [`Error::Api`] when the server responds with a non-2xx status. Every API
+/// route answers with `{"error": {"code", "message", "request_id", …}}`. Other shapes are
+/// still read, as a fallback that costs nothing: the string form `{"error": "<sentence>"}`
+/// Clockwork used before October 2026, and an identity-service body with a numeric `code`
+/// (still what Kratos' own `/auth/*` self-service routes answer). Parsing never fails — an
+/// unrecognised body gives `code = "unknown"` and `message = "HTTP <status>"`.
 ///
 /// # Branching
 ///
@@ -73,7 +74,9 @@ pub struct ApiError {
     /// `"conflict"`, `"mfa_required"`, `"ACTIVE_USER_LIMIT_REACHED"`).
     ///
     /// Codes are an open set; do not assume you have seen them all. `"unknown"` when the
-    /// response carried no string code (a Clockwork engine error, a pass-through body).
+    /// response carried no string code — which the API's own routes no longer do; it is
+    /// left for a body that did not come from the gateway (a proxy in between, an
+    /// identity-service answer passed through on `/auth/*`).
     pub code: String,
     /// Human-readable description of the error.
     pub message: String,

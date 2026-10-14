@@ -81,7 +81,9 @@ pub struct IdentityTraits {
     /// Preferred language, e.g. `"en"`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub locale: Option<String>,
-    /// Never returned by the API.
+    /// Never returned by the API (nor, since October 2026, is
+    /// `metadata_public.verne_tenant_id`): ownership is the API's business, not the
+    /// identity object's.
     #[deprecated(
         since = "1.4.0",
         note = "the API never returns a tenant_id trait; this field is always None and will be removed"
@@ -399,10 +401,17 @@ pub struct AuthorizeParams {
 
 /// Why an authorization check answered as it did.
 ///
-/// For an organization resource it is one of the five named variants. For any other
-/// resource the API answers with a free sentence ("subject `…` is an identity owned by
-/// tenant `…`"), which lands in [`Other`](Self::Other) — as does any reason added later.
-/// Do not branch on `Other`; it is for people.
+/// For an organization resource it is one of
+/// [`MemberWithPermission`](Self::MemberWithPermission),
+/// [`MemberWithoutPermission`](Self::MemberWithoutPermission),
+/// [`NotAMember`](Self::NotAMember), [`SubjectInactive`](Self::SubjectInactive) and
+/// [`NoSuchOrganization`](Self::NoSuchOrganization). For any other resource — *is the
+/// subject one of your active end users?* — it is [`OwnedByTenant`](Self::OwnedByTenant)
+/// (the one `allowed: true`), [`SubjectInactive`](Self::SubjectInactive),
+/// [`NotOwnedByTenant`](Self::NotOwnedByTenant) or
+/// [`NotAKnownIdentity`](Self::NotAKnownIdentity), and
+/// [`AuthorizationDecision::message`] says it in a sentence. A reason this SDK does not
+/// know yet lands in [`Other`](Self::Other); treat it as a denial.
 ///
 /// It deserializes from, and [`Display`](std::fmt::Display)s back to, the wire string.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -418,8 +427,14 @@ pub enum AuthorizeReason {
     /// There is no such organization in the key's project (another project's organization
     /// looks the same).
     NoSuchOrganization,
-    /// Any other reason: the sentence of a non-organization check, or a reason this SDK
-    /// does not know yet.
+    /// Any other resource: the subject is an active end user of your account.
+    OwnedByTenant,
+    /// Any other resource: the subject is an identity, and it is another account's.
+    NotOwnedByTenant,
+    /// Any other resource: nothing has that id — it does not exist, was deleted, or is not
+    /// an id at all.
+    NotAKnownIdentity,
+    /// A reason this SDK does not know yet (the wire string as received).
     Other(String),
 }
 
@@ -432,7 +447,10 @@ impl AuthorizeReason {
             Self::NotAMember => "not_a_member",
             Self::SubjectInactive => "subject_inactive",
             Self::NoSuchOrganization => "no_such_organization",
-            Self::Other(sentence) => sentence,
+            Self::OwnedByTenant => "owned_by_tenant",
+            Self::NotOwnedByTenant => "not_owned_by_tenant",
+            Self::NotAKnownIdentity => "not_a_known_identity",
+            Self::Other(wire) => wire,
         }
     }
 }
@@ -445,6 +463,9 @@ impl From<&str> for AuthorizeReason {
             "not_a_member" => Self::NotAMember,
             "subject_inactive" => Self::SubjectInactive,
             "no_such_organization" => Self::NoSuchOrganization,
+            "owned_by_tenant" => Self::OwnedByTenant,
+            "not_owned_by_tenant" => Self::NotOwnedByTenant,
+            "not_a_known_identity" => Self::NotAKnownIdentity,
             other => Self::Other(other.to_owned()),
         }
     }
@@ -485,6 +506,11 @@ pub struct AuthorizationDecision {
     /// [`SubjectInactive`](AuthorizeReason::SubjectInactive); absent otherwise.
     #[serde(default)]
     pub role: Option<String>,
+    /// For a resource that is not an organization: the decision as a sentence, for your
+    /// logs. Its wording can change; only [`reason`](Self::reason) is a contract. Absent
+    /// for an organization decision.
+    #[serde(default)]
+    pub message: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

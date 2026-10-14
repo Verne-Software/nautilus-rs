@@ -82,11 +82,11 @@ match verne.gate()?.identities().get("idn_…").await {
 }
 ```
 
-`ApiError` has `code`, `message`, `status`, `request_id` (empty when the response had none), `details` (every member of `error` besides `code`/`message`/`request_id`), `retry_after` (seconds, from the `Retry-After` header) and `body` (the raw parsed body). Parsing never fails: it understands the standard envelope, a plain string `error` (Clockwork engine errors) and an identity-service body with a numeric `code` (reported as `unknown`).
+`ApiError` has `code`, `message`, `status`, `request_id` (empty when the response had none), `details` (every member of `error` besides `code`/`message`/`request_id`), `retry_after` (seconds, from the `Retry-After` header) and `body` (the raw parsed body). Every API route, Clockwork's included, answers in the standard envelope with a string `code` and a `request_id`. Parsing never fails: a body in another shape (one that did not come from the API — a proxy in between, an identity-service answer passed through on `/auth/*`) is still an `Error::Api`, with `code == "unknown"` and whatever sentence it had in `message`.
 
 | Status | Codes | Meaning |
 |---|---|---|
-| `400` | `invalid_payload` (`invalid_request` from `POST /v1/gate/tokens`) | Bad input; the message says what |
+| `400` | `invalid_payload` | Bad input; the message says what |
 | `401` | `unauthorized` | Missing, wrong or revoked key; or a dead session |
 | `402` | `ACTIVE_USER_LIMIT_REACHED`, `UPGRADE_REQUIRED`, `JOB_LIMIT_REACHED`, `PROJECT_LIMIT_REACHED`, `BILLING_HARD_BLOCKED`, `SUBSCRIPTION_PAST_DUE`, `payment_required` | A plan limit or a billing state; the numbers are in `details` |
 | `403` | `forbidden`, `plan_required`, `mfa_required`, `account_disabled` | `forbidden` = the key lacks the scope for this API |
@@ -228,11 +228,11 @@ match decision.reason {
     AuthorizeReason::NotAMember => println!("not in this organization"),
     AuthorizeReason::SubjectInactive => println!("the user is deactivated"),
     AuthorizeReason::NoSuchOrganization => println!("no such organization in this project"),
-    AuthorizeReason::Other(sentence) => println!("{sentence}"),
+    other => println!("not allowed: {other}"), // the ownership reasons below, or a new one
 }
 ```
 
-`authorize` and `can` build `resource = "organization:<id>"` for you — nobody glues the string by hand. For a resource that is not an organization, `gate.authorize(AuthorizeParams { .. })` only answers *is the subject one of your active end users?*, with a sentence in `reason` (`AuthorizeReason::Other`).
+`authorize` and `can` build `resource = "organization:<id>"` for you — nobody glues the string by hand. For a resource that is not an organization, `gate.authorize(AuthorizeParams { .. })` only answers *is the subject one of your active end users?* Its `reason` is a code too: `AuthorizeReason::OwnedByTenant` (the one `allowed: true`), `SubjectInactive`, `NotOwnedByTenant`, `NotAKnownIdentity`. The sentence a person would read is in `decision.message`, for your logs — its wording can change, `reason` is the contract. A reason the SDK does not know yet is `AuthorizeReason::Other(wire)`; treat it as a denial.
 
 ## Gate — sessions and the session check
 
@@ -264,8 +264,10 @@ match gate.sessions().check(&session_token).await {
 
 let sessions = gate.sessions().list(&user.id).await?;      // Vec<Session>
 gate.sessions().revoke(&sessions[0].id).await?;            // idempotent
-gate.sessions().revoke_all(&user.id).await?;               // 404 if the user has no session at all
+gate.sessions().revoke_all(&user.id).await?;               // everywhere
 ```
+
+`revoke_all` is `Ok(())` also when the user has no session, so a "log out everywhere" button can be pressed twice. An id that is not one of your users (another account's, unknown, or one you deleted) is a `403 forbidden`.
 
 ## Gate — signed tokens (JWT)
 

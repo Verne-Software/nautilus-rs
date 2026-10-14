@@ -610,22 +610,63 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
         Some("invalid_payload"),
     );
 
-    // The plain ownership check still works, and says so in a sentence.
-    let owned = gate
-        .authorize(AuthorizeParams {
-            subject: member.id.clone(),
+    // The plain ownership check: a code in `reason`, the sentence in `message`.
+    let owns = |subject: &str| {
+        gate.authorize(AuthorizeParams {
+            subject: subject.to_owned(),
             action: "read".into(),
             resource: "doc:1".into(),
             context: None,
         })
-        .await
-        .unwrap();
+    };
+    let owned = owns(&member.id).await.unwrap();
     assert!(owned.allowed);
+    assert_eq!(owned.reason, AuthorizeReason::OwnedByTenant);
     assert!(
-        matches!(owned.reason, AuthorizeReason::Other(_)),
+        owned
+            .message
+            .as_deref()
+            .is_some_and(|m| m.contains("is an identity owned by tenant")),
         "{:?}",
-        owned.reason
+        owned.message
     );
+    let nobody = owns(NIL_UUID).await.unwrap();
+    assert!(!nobody.allowed);
+    assert_eq!(nobody.reason, AuthorizeReason::NotAKnownIdentity);
+    let not_an_id = owns("usr_123").await.unwrap();
+    assert_eq!(not_an_id.reason, AuthorizeReason::NotAKnownIdentity);
+    gate.identities().deactivate(&outsider.id).await.unwrap();
+    let off = owns(&outsider.id).await;
+    gate.identities().activate(&outsider.id).await.unwrap();
+    let off = off.unwrap();
+    assert!(!off.allowed);
+    assert_eq!(off.reason, AuthorizeReason::SubjectInactive);
+
+    // --- a malformed token request is 400 invalid_payload, with a request id -------------
+    let e = api(
+        gate.tokens()
+            .create(CreateTokenParams {
+                subject: String::new(),
+                scopes: None,
+                ttl_seconds: None,
+            })
+            .await,
+        400,
+        Some("invalid_payload"),
+    );
+    assert!(e.request_id.starts_with("req_"), "{}", e.request_id);
+
+    // --- the identity object no longer carries the owner stamp ---------------------------
+    let read = gate.identities().get(&member.id).await.unwrap();
+    assert!(
+        read.metadata_public
+            .as_ref()
+            .and_then(|m| m.get("verne_tenant_id"))
+            .is_none(),
+        "{:?}",
+        read.metadata_public
+    );
+    assert!(!read.extra.contains_key("verne_tenant_id"));
 
     // --- introspection lists the end user's organizations --------------------------------
     let token = gate
@@ -726,6 +767,38 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
         gate.sessions().revoke(NIL_UUID).await,
         404,
         Some("not_found"),
+    );
+
+    // "Log out everywhere" is idempotent: nothing left to revoke, a user who never signed
+    // in, twice over — all Ok. An id that is not one of your users (unknown, or deleted
+    // through the API) is 403.
+    gate.sessions().revoke_all(&member.id).await.unwrap();
+    gate.sessions().revoke_all(&outsider.id).await.unwrap();
+    gate.sessions().revoke_all(&outsider.id).await.unwrap();
+    api(
+        gate.sessions().revoke_all(NIL_UUID).await,
+        403,
+        Some("forbidden"),
+    );
+    let gone = gate
+        .identities()
+        .create(CreateIdentityParams {
+            schema_id: "user".into(),
+            traits: IdentityTraitsInput {
+                email: email("gone"),
+                locale: None,
+            },
+            credentials: None,
+            state: None,
+        })
+        .await
+        .unwrap();
+    created_identity(&gone.id);
+    gate.identities().delete(&gone.id).await.unwrap();
+    api(
+        gate.sessions().revoke_all(&gone.id).await,
+        403,
+        Some("forbidden"),
     );
 
     // --- audit log records the role and membership changes, filtered and paged -----------
@@ -932,7 +1005,7 @@ async fn clockwork_and_passepartout_against_a_live_stack() {
     assert!(!usage.plan.is_empty());
     let _ = (usage.cron.active, usage.cron.limit, usage.delayed.pending);
 
-    // An engine error that is a plain string keeps its sentence.
+    // An engine error is the standard envelope, with a request id.
     let e = api(
         verne
             .clockwork()
@@ -946,10 +1019,10 @@ async fn clockwork_and_passepartout_against_a_live_stack() {
             })
             .await,
         400,
-        Some("unknown"),
+        Some("invalid_payload"),
     );
     assert!(e.message.to_lowercase().contains("cron"), "{}", e.message);
-    assert!(e.body.is_some());
+    assert!(e.request_id.starts_with("req_"), "{}", e.request_id);
 
     // Passepartout introspection of a token that is not one: inactive, nothing else.
     let pp: &Passepartout = verne.passepartout().unwrap();

@@ -32,9 +32,11 @@ impl SessionsClient {
     /// Revoke every session of an end user — "log out everywhere". Signed tokens already
     /// issued keep verifying until their own `exp` (at most 15 minutes).
     ///
-    /// Maps to `DELETE /v1/gate/identities/{id}/sessions`. Note: the API answers `404`
-    /// (with the identity service's own body, a numeric `code`) when the user has no
-    /// session at all; it surfaces here as an [`Error::Api`] with `status == 404`.
+    /// Maps to `DELETE /v1/gate/identities/{id}/sessions`. Idempotent: a user of yours with
+    /// no session at all is `Ok(())` too. An id that is not one of your users — another
+    /// account's, unknown, or one you deleted — is an [`Error::Api`] with `status == 403`
+    /// (`forbidden`). `404 not_found` is rare: a user removed from the identity service
+    /// other than through `identities().delete()`, which Gate still remembered as yours.
     pub async fn revoke_all(&self, identity_id: &str) -> Result<(), Error> {
         self.http
             .delete(&format!(

@@ -156,7 +156,11 @@ impl Gate {
     ///   [`organizations().authorize()`](OrganizationsClient::authorize) /
     ///   [`can()`](OrganizationsClient::can), which build the resource.
     /// - any other resource — only *is `subject` one of your active end users?*; `reason`
-    ///   is a sentence for people.
+    ///   is [`OwnedByTenant`](crate::AuthorizeReason::OwnedByTenant) (allowed),
+    ///   [`SubjectInactive`](crate::AuthorizeReason::SubjectInactive),
+    ///   [`NotOwnedByTenant`](crate::AuthorizeReason::NotOwnedByTenant) or
+    ///   [`NotAKnownIdentity`](crate::AuthorizeReason::NotAKnownIdentity), and
+    ///   [`message`](AuthorizationDecision::message) says it in a sentence for your logs.
     ///
     /// Maps to `POST /v1/gate/authorize`.
     ///

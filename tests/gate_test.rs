@@ -443,7 +443,7 @@ async fn test_authorize() {
         .mock("POST", "/v1/gate/authorize")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"allowed":true,"decision_id":"dec_001","reason":"subject `usr_123` is an identity owned by tenant `ten_001`"}"#)
+        .with_body(r#"{"allowed":true,"decision_id":"dec_001","reason":"owned_by_tenant","message":"subject `usr_123` is an identity owned by tenant `ten_001`"}"#)
         .create_async()
         .await;
 
@@ -465,11 +465,12 @@ async fn test_authorize() {
 
     assert!(decision.allowed);
     assert_eq!(decision.decision_id, "dec_001");
-    // A sentence from a non-organization check lands in Other, and there is no role.
-    assert!(matches!(
-        decision.reason,
-        nautilus_rs::AuthorizeReason::Other(_)
-    ));
+    // A non-organization check: a code, the sentence in `message`, and no role.
+    assert_eq!(decision.reason, nautilus_rs::AuthorizeReason::OwnedByTenant);
+    assert_eq!(
+        decision.message.as_deref(),
+        Some("subject `usr_123` is an identity owned by tenant `ten_001`")
+    );
     assert_eq!(decision.role, None);
     mock.assert_async().await;
 }

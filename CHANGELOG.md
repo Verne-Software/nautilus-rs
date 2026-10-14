@@ -17,8 +17,8 @@ All notable changes to `nautilus-rs`. The format follows
   `gate.identities().list_organizations()`. `ListParams` for cursor paging.
 - **Permission checks in an organization**: `organizations().authorize(org_id, identity_id,
   permission)` and `.can(…)` → `bool`. `AuthorizationDecision` gains `role`, and `reason` is
-  the new `AuthorizeReason` enum (the five organization reasons, and `Other(String)` for
-  the sentence of a non-organization check or a reason added later).
+  the new `AuthorizeReason` enum (the organization reasons, the ownership reasons below,
+  and `Other(String)` for a reason added later).
 - **Audit log**: `gate.audit_log().list(ListAuditLogParams)` with filters and cursor paging.
 - **Automatic deletion rules**: `gate.lifecycle()` (`list_rules`, `set_rule`, `delete_rule`,
   `preview_rule`, `list_actions`) and `LifecycleRuleKind`.
@@ -42,6 +42,15 @@ All notable changes to `nautilus-rs`. The format follows
   `verifiable_addresses` and `recovery_addresses`; the rest of the Kratos object is in
   `Identity::extra`.
 - `tests/integration_test.rs`: an opt-in (`#[ignore]`) suite against a running local stack.
+- Aligned with the API changes of October 2026: `AuthorizeReason` gains `OwnedByTenant`,
+  `NotOwnedByTenant` and `NotAKnownIdentity` (with `SubjectInactive`, the codes of a check
+  on a resource that is not an organization; `Other(String)` stays for a reason added
+  later), and `AuthorizationDecision` gains `message`, the sentence that check used to put
+  in `reason`. `sessions().revoke_all()` is documented as `Ok(())` for a user with no
+  session (`204`, it was a `404`). Docs and comments name `invalid_payload` (not
+  `invalid_request`) for a malformed token request and treat Clockwork errors as the
+  standard envelope; the string-form and numeric-code parsing stays as a fallback.
+  Identities no longer carry `metadata_public.verne_tenant_id`; the SDK never read it.
 
 ### Fixed
 
@@ -85,4 +94,5 @@ All notable changes to `nautilus-rs`. The format follows
 
 ### Deprecated
 
-- `IdentityTraits::tenant_id`: the API never returns it.
+- `IdentityTraits::tenant_id`: the API never returns it (nor, any longer,
+  `metadata_public.verne_tenant_id`).

@@ -238,7 +238,42 @@ async fn the_403_for_a_missing_scope_is_the_standard_envelope() {
     assert_eq!(err.retry_after, None);
 }
 
-/// Clockwork engine errors are `{"error": "<sentence>"}`, a string.
+/// Clockwork errors are the standard envelope.
+#[tokio::test]
+async fn a_clockwork_error_is_the_standard_envelope() {
+    let mut server = Server::new_async().await;
+    server
+        .mock("POST", "/v1/clockwork/jobs")
+        .with_status(400)
+        .with_header(JSON.0, JSON.1)
+        .with_body(r#"{"error":{"code":"invalid_payload","message":"Invalid cron schedule.","request_id":"req_cw"}}"#)
+        .create_async()
+        .await;
+
+    let cw = Clockwork::builder()
+        .api_key(KEY)
+        .base_url(server.url())
+        .build()
+        .unwrap();
+    let err = api(cw
+        .jobs()
+        .create(CreateCronJobParams {
+            name: "n".into(),
+            schedule: "nope".into(),
+            url: "https://example.com".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err());
+
+    assert_eq!(err.status, 400);
+    assert_eq!(err.code, "invalid_payload");
+    assert_eq!(err.message, "Invalid cron schedule.");
+    assert_eq!(err.request_id, "req_cw");
+}
+
+/// The string form `{"error": "<sentence>"}` Clockwork used before October 2026 is still
+/// read, as a fallback.
 #[tokio::test]
 async fn a_plain_string_error_keeps_its_sentence_under_code_unknown() {
     let mut server = Server::new_async().await;
@@ -278,7 +313,8 @@ async fn a_plain_string_error_keeps_its_sentence_under_code_unknown() {
     );
 }
 
-/// Kratos passthrough: `code` is a number, which is never used as the code.
+/// A Kratos body (still what its own `/auth/*` routes answer): `code` is a number, which is
+/// never used as the code.
 #[tokio::test]
 async fn a_numeric_code_is_never_the_code() {
     let mut server = Server::new_async().await;
@@ -303,7 +339,7 @@ async fn a_numeric_code_is_never_the_code() {
     assert_eq!(err.details["status"], "Not Found");
 }
 
-/// `POST /v1/gate/tokens` 400: the code is `invalid_request`, there is no `request_id`.
+/// An envelope without a `request_id` (one that did not come from the gateway) parses.
 #[tokio::test]
 async fn an_envelope_without_request_id_is_fine() {
     let mut server = Server::new_async().await;
@@ -311,7 +347,7 @@ async fn an_envelope_without_request_id_is_fine() {
         .mock("POST", "/v1/gate/tokens")
         .with_status(400)
         .with_header(JSON.0, JSON.1)
-        .with_body(r#"{"error":{"code":"invalid_request","message":"subject is required."}}"#)
+        .with_body(r#"{"error":{"code":"invalid_payload","message":"subject is required."}}"#)
         .create_async()
         .await;
 
@@ -330,10 +366,10 @@ async fn an_envelope_without_request_id_is_fine() {
         .await
         .unwrap_err());
 
-    assert_eq!(err.code, "invalid_request");
+    assert_eq!(err.code, "invalid_payload");
     assert_eq!(err.request_id, "");
     // Display does not print an empty request id.
-    assert_eq!(err.to_string(), "[invalid_request] subject is required.");
+    assert_eq!(err.to_string(), "[invalid_payload] subject is required.");
 }
 
 #[tokio::test]

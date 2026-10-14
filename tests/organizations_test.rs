@@ -494,7 +494,7 @@ async fn authorize_builds_the_organization_resource() {
 }
 
 #[tokio::test]
-async fn every_organization_reason_parses_and_displays_as_its_wire_string() {
+async fn every_known_reason_parses_and_displays_as_its_wire_string() {
     let cases = [
         (
             "member_with_permission",
@@ -521,6 +521,25 @@ async fn every_organization_reason_parses_and_displays_as_its_wire_string() {
             false,
             None,
         ),
+        // The ownership check on a resource that is not an organization.
+        (
+            "owned_by_tenant",
+            AuthorizeReason::OwnedByTenant,
+            true,
+            None,
+        ),
+        (
+            "not_owned_by_tenant",
+            AuthorizeReason::NotOwnedByTenant,
+            false,
+            None,
+        ),
+        (
+            "not_a_known_identity",
+            AuthorizeReason::NotAKnownIdentity,
+            false,
+            None,
+        ),
     ];
     for (wire, expected, _, role) in cases {
         let body = match role {
@@ -541,21 +560,29 @@ async fn every_organization_reason_parses_and_displays_as_its_wire_string() {
 #[tokio::test]
 async fn an_unknown_reason_is_other_and_round_trips() {
     let decision: nautilus_rs::AuthorizationDecision = serde_json::from_str(
-        r#"{"allowed":true,"decision_id":"d","reason":"subject `x` is an identity owned by tenant `y`"}"#,
+        r#"{"allowed":false,"decision_id":"d","reason":"a_reason_added_later"}"#,
     )
     .unwrap();
     assert_eq!(
         decision.reason,
-        AuthorizeReason::Other("subject `x` is an identity owned by tenant `y`".into())
+        AuthorizeReason::Other("a_reason_added_later".into())
     );
-    assert_eq!(
-        decision.reason.to_string(),
-        "subject `x` is an identity owned by tenant `y`"
-    );
+    assert_eq!(decision.reason.to_string(), "a_reason_added_later");
     assert_eq!(
         serde_json::to_value(&decision.reason).unwrap(),
-        json!("subject `x` is an identity owned by tenant `y`")
+        json!("a_reason_added_later")
     );
+    assert_eq!(decision.message, None);
+}
+
+#[tokio::test]
+async fn an_ownership_decision_carries_its_sentence_in_message() {
+    let decision: nautilus_rs::AuthorizationDecision = serde_json::from_str(
+        r#"{"allowed":false,"decision_id":"d","reason":"subject_inactive","message":"subject `x` is inactive"}"#,
+    )
+    .unwrap();
+    assert_eq!(decision.reason, AuthorizeReason::SubjectInactive);
+    assert_eq!(decision.message.as_deref(), Some("subject `x` is inactive"));
 }
 
 #[tokio::test]

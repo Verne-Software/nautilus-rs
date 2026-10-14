@@ -220,6 +220,8 @@ async fn create_signed_sends_the_session_token_and_no_api_key() {
     mock.assert_async().await;
 }
 
+/// The API answers `401 unauthorized` in the envelope now; a Kratos body with a numeric code
+/// is still read, as a fallback.
 #[tokio::test]
 async fn create_signed_on_a_dead_session_is_a_401_with_the_numeric_code_read_as_unknown() {
     let (mut server, gate) = gate().await;
@@ -275,6 +277,7 @@ async fn sessions_list_is_a_bare_array() {
     mock.assert_async().await;
 }
 
+/// `revoke_all` is `204` also for a user with no session: `Ok(())`.
 #[tokio::test]
 async fn sessions_revoke_and_revoke_all() {
     let (mut server, gate) = gate().await;
@@ -299,20 +302,22 @@ async fn sessions_revoke_and_revoke_all() {
     all.assert_async().await;
 }
 
-/// Kratos answers 404 with its own body when the user has no session; surfaced, not swallowed.
+/// An id that is not one of your users is `403 forbidden` in the envelope.
 #[tokio::test]
-async fn revoke_all_without_sessions_surfaces_the_kratos_404() {
+async fn revoke_all_of_an_identity_not_yours_is_a_403() {
     let (mut server, gate) = gate().await;
     server
         .mock("DELETE", format!("/v1/gate/identities/{USER}/sessions").as_str())
-        .with_status(404)
+        .with_status(403)
         .with_header(JSON.0, JSON.1)
-        .with_body(r#"{"error":{"code":404,"status":"Not Found","message":"The requested resource could not be found"}}"#)
+        .with_body(r#"{"error":{"code":"forbidden","message":"Identity does not belong to this tenant","request_id":"req_1"}}"#)
         .create_async()
         .await;
 
     let err = gate.sessions().revoke_all(USER).await.unwrap_err();
-    assert!(matches!(err, Error::Api(e) if e.status == 404 && e.code == "unknown"));
+    assert!(
+        matches!(err, Error::Api(e) if e.status == 403 && e.code == "forbidden" && e.request_id == "req_1")
+    );
 }
 
 #[tokio::test]
