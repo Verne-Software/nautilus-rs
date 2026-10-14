@@ -7,7 +7,7 @@ async fn test_login_start() {
 
     let mock = server
         .mock("POST", "/v1/passepartout/login/start")
-        .match_header("Authorization", "Bearer vrn_passepartout_test_sk_abc")
+        .match_header("Authorization", "Bearer vrn_9f8a7c1b2d3e4f50")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(
@@ -17,7 +17,7 @@ async fn test_login_start() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -36,7 +36,7 @@ async fn test_login_status_pending() {
 
     let mock = server
         .mock("GET", "/v1/passepartout/login/status?nonce=nonce_abc")
-        .match_header("Authorization", "Bearer vrn_passepartout_test_sk_abc")
+        .match_header("Authorization", "Bearer vrn_9f8a7c1b2d3e4f50")
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(r#"{"status":"pending"}"#)
@@ -44,7 +44,7 @@ async fn test_login_status_pending() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -72,7 +72,7 @@ async fn test_login_status_completed() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -103,7 +103,7 @@ async fn test_login_status_urlencodes_nonce() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -120,7 +120,7 @@ async fn test_introspect() {
 
     let mock = server
         .mock("POST", "/v1/passepartout/tokens/introspect")
-        .match_header("Authorization", "Bearer vrn_passepartout_test_sk_abc")
+        .match_header("Authorization", "Bearer vrn_9f8a7c1b2d3e4f50")
         .match_body(r#"{"access_token":"tok_abc"}"#)
         .with_status(200)
         .with_header("content-type", "application/json")
@@ -131,7 +131,7 @@ async fn test_introspect() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -141,10 +141,7 @@ async fn test_introspect() {
     assert!(info.active);
     assert_eq!(info.subject.as_deref(), Some("idn_001"));
     assert_eq!(info.tenant_id.as_deref(), Some("ten_001"));
-    assert_eq!(
-        info.scopes,
-        Some(vec!["passepartout.login".to_string()])
-    );
+    assert_eq!(info.scopes, Some(vec!["passepartout.login".to_string()]));
     assert_eq!(info.expires_at.as_deref(), Some("2026-01-01T01:00:00Z"));
     mock.assert_async().await;
 }
@@ -162,7 +159,7 @@ async fn test_introspect_inactive() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -190,7 +187,7 @@ async fn test_passepartout_via_verne() {
         .await;
 
     let verne = nautilus_rs::Verne::builder()
-        .passepartout("vrn_passepartout_test_sk_abc")
+        .passepartout("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -216,7 +213,7 @@ async fn test_passepartout_api_error() {
         .await;
 
     let passepartout = Passepartout::builder()
-        .api_key("vrn_passepartout_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -233,4 +230,48 @@ async fn test_passepartout_api_error() {
         }
         other => panic!("expected Error::Api, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn test_introspect_carries_orgs_and_an_inactive_token_carries_nothing() {
+    let mut server = Server::new_async().await;
+
+    server
+        .mock("POST", "/v1/passepartout/tokens/introspect")
+        .match_body(mockito::Matcher::Json(serde_json::json!({"access_token": "t_live"})))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"active":true,"subject":"u1","tenant_id":"t1","orgs":[{"id":"o1","role":"admin","permissions":["invoices:write"]}],"orgs_truncated":true}"#)
+        .create_async()
+        .await;
+    server
+        .mock("POST", "/v1/passepartout/tokens/introspect")
+        .match_body(mockito::Matcher::Json(
+            serde_json::json!({"access_token": "t_dead"}),
+        ))
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"active":false}"#)
+        .create_async()
+        .await;
+
+    let passepartout = Passepartout::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let live = passepartout.introspect("t_live").await.unwrap();
+    assert!(live.active);
+    let orgs = live.orgs.unwrap();
+    assert_eq!(
+        (orgs[0].id.as_str(), orgs[0].role.as_str()),
+        ("o1", "admin")
+    );
+    assert_eq!(live.orgs_truncated, Some(true));
+
+    let dead = passepartout.introspect("t_dead").await.unwrap();
+    assert!(!dead.active);
+    assert_eq!(dead.orgs, None);
+    assert_eq!(dead.subject, None);
 }

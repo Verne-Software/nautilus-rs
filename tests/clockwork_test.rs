@@ -32,7 +32,7 @@ async fn test_list_jobs() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -59,7 +59,7 @@ async fn test_create_job() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -94,7 +94,7 @@ async fn test_update_job() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -127,7 +127,7 @@ async fn test_delete_job() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -149,7 +149,7 @@ async fn test_job_executions() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -178,7 +178,7 @@ async fn test_list_delayed() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -204,7 +204,7 @@ async fn test_create_delayed() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -236,7 +236,7 @@ async fn test_cancel_delayed() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -258,7 +258,7 @@ async fn test_delayed_executions() {
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -279,12 +279,14 @@ async fn test_clockwork_api_error() {
         .mock("GET", "/v1/clockwork/jobs/job_notfound/executions")
         .with_status(404)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"error":{"code":"not_found","message":"Job not found.","request_id":"req_404"}}"#)
+        .with_body(
+            r#"{"error":{"code":"not_found","message":"Job not found.","request_id":"req_404"}}"#,
+        )
         .create_async()
         .await;
 
     let clockwork = Clockwork::builder()
-        .api_key("vrn_clockwork_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -303,4 +305,58 @@ async fn test_clockwork_api_error() {
         }
         other => panic!("expected Error::Api, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn test_usage() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("GET", "/v1/clockwork/usage")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"plan":"free","tier":"free","cron":{"active":2,"limit":5},"delayed":{"pending":0,"limit":null}}"#)
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let usage = clockwork.usage().await.unwrap();
+
+    assert_eq!(usage.plan, "free");
+    assert_eq!(usage.tier.as_deref(), Some("free"));
+    assert_eq!(usage.cron.active, 2);
+    assert_eq!(usage.cron.limit, Some(5));
+    assert_eq!(usage.delayed.pending, 0);
+    assert_eq!(usage.delayed.limit, None);
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_execution_attempt() {
+    let mut server = Server::new_async().await;
+
+    server
+        .mock("GET", "/v1/clockwork/jobs/job_1/executions")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(r#"[{"id":"e1","job_id":"job_1","status":"failed","started_at":"2026-10-14T10:00:00Z","completed_at":null,"duration_ms":null,"response_status":null,"response_body":null,"error_message":"timeout","attempt":2},{"id":"e0","job_id":"job_1","status":"success","started_at":"2026-10-13T10:00:00Z","completed_at":null,"duration_ms":null,"response_status":200,"response_body":null,"error_message":null}]"#)
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let executions = clockwork.jobs().executions("job_1").await.unwrap();
+
+    assert_eq!(executions[0].attempt, Some(2));
+    // Rows from before the field existed simply have none.
+    assert_eq!(executions[1].attempt, None);
 }

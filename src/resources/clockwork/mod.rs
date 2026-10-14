@@ -4,9 +4,11 @@ use std::sync::Arc;
 
 use crate::{error::Error, http::HttpClient};
 use types::{
-    CreateCronJobParams, CreateDelayedJobParams, CronJob, DelayedJob, Execution,
+    ClockworkUsage, CreateCronJobParams, CreateDelayedJobParams, CronJob, DelayedJob, Execution,
     UpdateCronJobParams,
 };
+
+use crate::http::urlencode as seg;
 
 /// Clockwork service client — Cron-as-a-Service.
 ///
@@ -19,12 +21,12 @@ use types::{
 /// ```no_run
 /// // Standalone
 /// use nautilus_rs::Clockwork;
-/// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+/// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
 ///
 /// // Via unified client
 /// use nautilus_rs::Verne;
 /// # fn run() -> Result<(), nautilus_rs::Error> {
-/// let verne = Verne::builder().clockwork("vrn_clockwork_live_sk_…").build()?;
+/// let verne = Verne::builder().clockwork("vrn_9f8a7c1b2d3e4f50").build()?;
 /// let clockwork = verne.clockwork()?;
 /// # Ok(())
 /// # }
@@ -62,6 +64,30 @@ impl Clockwork {
         Self { http }
     }
 
+    /// How many jobs exist against the plan's limits.
+    ///
+    /// Creating a job over a limit, or resuming a paused one, is refused with `402`
+    /// (`UPGRADE_REQUIRED` or `JOB_LIMIT_REACHED`, the numbers in
+    /// [`ApiError::details`](crate::ApiError::details)) — never retried.
+    ///
+    /// Maps to `GET /v1/clockwork/usage`.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// use nautilus_rs::Clockwork;
+    ///
+    /// # async fn run() -> Result<(), nautilus_rs::Error> {
+    /// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
+    /// let usage = clockwork.usage().await?;
+    /// println!("{} cron jobs of {:?}", usage.cron.active, usage.cron.limit);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn usage(&self) -> Result<ClockworkUsage, Error> {
+        self.http.get("/v1/clockwork/usage").await
+    }
+
     /// Return a [`CronJobsClient`] for managing recurring cron jobs.
     pub fn jobs(&self) -> CronJobsClient {
         CronJobsClient {
@@ -85,7 +111,7 @@ impl Clockwork {
 /// use nautilus_rs::Clockwork;
 ///
 /// let clockwork = Clockwork::builder()
-///     .api_key("vrn_clockwork_live_sk_…")
+///     .api_key("vrn_9f8a7c1b2d3e4f50")
 ///     .timeout_secs(15)
 ///     .build()
 ///     .expect("invalid configuration");
@@ -150,7 +176,7 @@ impl CronJobsClient {
     /// use nautilus_rs::Clockwork;
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+    /// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
     /// for job in clockwork.jobs().list().await? {
     ///     println!("{} — {}", job.name, job.schedule);
     /// }
@@ -171,7 +197,7 @@ impl CronJobsClient {
     /// use nautilus_rs::{Clockwork, CreateCronJobParams};
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+    /// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
     /// let job = clockwork.jobs().create(CreateCronJobParams {
     ///     name: "nightly-report".into(),
     ///     schedule: "0 2 * * *".into(),
@@ -183,7 +209,7 @@ impl CronJobsClient {
     /// # }
     /// ```
     pub async fn create(&self, params: CreateCronJobParams) -> Result<CronJob, Error> {
-        self.http.post("/v1/clockwork/jobs", &params, false).await
+        self.http.post("/v1/clockwork/jobs", &params).await
     }
 
     /// Partially update an existing cron job.
@@ -196,7 +222,7 @@ impl CronJobsClient {
         params: UpdateCronJobParams,
     ) -> Result<CronJob, Error> {
         self.http
-            .patch(&format!("/v1/clockwork/jobs/{job_id}"), &params)
+            .patch(&format!("/v1/clockwork/jobs/{}", seg(job_id)), &params)
             .await
     }
 
@@ -205,7 +231,7 @@ impl CronJobsClient {
     /// Maps to `DELETE /v1/clockwork/jobs/{id}`.
     pub async fn delete(&self, job_id: &str) -> Result<(), Error> {
         self.http
-            .delete(&format!("/v1/clockwork/jobs/{job_id}"))
+            .delete(&format!("/v1/clockwork/jobs/{}", seg(job_id)))
             .await
     }
 
@@ -214,7 +240,7 @@ impl CronJobsClient {
     /// Maps to `GET /v1/clockwork/jobs/{id}/executions`.
     pub async fn executions(&self, job_id: &str) -> Result<Vec<Execution>, Error> {
         self.http
-            .get(&format!("/v1/clockwork/jobs/{job_id}/executions"))
+            .get(&format!("/v1/clockwork/jobs/{}/executions", seg(job_id)))
             .await
     }
 }
@@ -237,7 +263,7 @@ impl DelayedJobsClient {
     /// use nautilus_rs::Clockwork;
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+    /// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
     /// for job in clockwork.delayed().list().await? {
     ///     println!("{} runs at {}", job.name, job.run_at);
     /// }
@@ -258,7 +284,7 @@ impl DelayedJobsClient {
     /// use nautilus_rs::{Clockwork, CreateDelayedJobParams};
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+    /// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
     /// let job = clockwork.delayed().create(CreateDelayedJobParams {
     ///     name: "send-reminder".into(),
     ///     run_at: "2026-01-01T12:00:00Z".into(),
@@ -270,9 +296,7 @@ impl DelayedJobsClient {
     /// # }
     /// ```
     pub async fn create(&self, params: CreateDelayedJobParams) -> Result<DelayedJob, Error> {
-        self.http
-            .post("/v1/clockwork/delayed", &params, false)
-            .await
+        self.http.post("/v1/clockwork/delayed", &params).await
     }
 
     /// Cancel a pending delayed job.
@@ -280,7 +304,7 @@ impl DelayedJobsClient {
     /// Maps to `DELETE /v1/clockwork/delayed/{id}`.
     pub async fn cancel(&self, job_id: &str) -> Result<(), Error> {
         self.http
-            .delete(&format!("/v1/clockwork/delayed/{job_id}"))
+            .delete(&format!("/v1/clockwork/delayed/{}", seg(job_id)))
             .await
     }
 
@@ -289,7 +313,7 @@ impl DelayedJobsClient {
     /// Maps to `GET /v1/clockwork/delayed/{id}/executions`.
     pub async fn executions(&self, job_id: &str) -> Result<Vec<Execution>, Error> {
         self.http
-            .get(&format!("/v1/clockwork/delayed/{job_id}/executions"))
+            .get(&format!("/v1/clockwork/delayed/{}/executions", seg(job_id)))
             .await
     }
 }

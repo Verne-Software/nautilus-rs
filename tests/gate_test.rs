@@ -6,7 +6,7 @@ use nautilus_rs::{
 
 fn identity_json(id: &str) -> String {
     format!(
-        r#"{{"id":"{id}","schema_id":"user","state":"active","traits":{{"email":"user@example.com","tenant_id":"ten_001"}}}}"#
+        r#"{{"id":"{id}","schema_id":"user","state":"active","traits":{{"email":"user@example.com","locale":"en"}}}}"#
     )
 }
 
@@ -23,7 +23,7 @@ async fn test_create_identity() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -34,7 +34,7 @@ async fn test_create_identity() {
             schema_id: "user".into(),
             traits: IdentityTraitsInput {
                 email: "user@example.com".into(),
-                custom_data: None,
+                locale: Some("en".into()),
             },
             credentials: None,
             state: Some("active".into()),
@@ -60,7 +60,7 @@ async fn test_get_identity() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -84,7 +84,7 @@ async fn test_patch_identity() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -95,8 +95,8 @@ async fn test_patch_identity() {
             "idn_001",
             vec![JsonPatchOp {
                 op: "replace".into(),
-                path: "/traits/custom_data/role".into(),
-                value: Some(serde_json::json!("admin")),
+                path: "/traits/email".into(),
+                value: Some(serde_json::json!("new@example.com")),
                 from: None,
             }],
         )
@@ -118,7 +118,7 @@ async fn test_delete_identity() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -137,13 +137,13 @@ async fn test_set_state() {
         .with_status(200)
         .with_header("content-type", "application/json")
         .with_body(
-            r#"{"id":"idn_001","schema_id":"user","state":"inactive","traits":{"email":"user@example.com","tenant_id":"ten_001"}}"#,
+            r#"{"id":"idn_001","schema_id":"user","state":"inactive","traits":{"email":"user@example.com","locale":"en"}}"#,
         )
         .create_async()
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -172,7 +172,7 @@ async fn test_activate_sends_state_active() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -192,7 +192,7 @@ async fn test_resend_verification() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -217,7 +217,7 @@ async fn test_get_security_settings() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -243,7 +243,7 @@ async fn test_update_security_settings() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -273,7 +273,7 @@ async fn test_get_oidc_providers() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -302,7 +302,7 @@ async fn test_update_oidc_providers() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -334,7 +334,7 @@ async fn test_get_enabled_providers() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -353,12 +353,14 @@ async fn test_create_login_flow() {
         .mock("GET", "/v1/gate/auth/login")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"id":"flow_1","ui":{"action":"https://api.vernesoft.com/auth/x","nodes":[]}}"#)
+        .with_body(
+            r#"{"id":"flow_1","ui":{"action":"https://api.vernesoft.com/auth/x","nodes":[]}}"#,
+        )
         .create_async()
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -370,21 +372,25 @@ async fn test_create_login_flow() {
 }
 
 #[tokio::test]
-async fn test_create_token_sends_no_auth_header() {
+async fn test_create_token_sends_the_key_in_the_header_and_none_in_the_body() {
     let mut server = Server::new_async().await;
 
-    // Verify no Authorization header is sent
+    // The gateway authenticates from the header only and ignores a body key; a secret in
+    // the body is for nothing. Body: exactly the params.
     let mock = server
         .mock("POST", "/v1/gate/tokens")
-        .match_header("Authorization", mockito::Matcher::Missing)
-        .with_status(200)
+        .match_header("Authorization", "Bearer vrn_9f8a7c1b2d3e4f50")
+        .match_body(mockito::Matcher::Json(
+            serde_json::json!({"subject": "usr_123", "scopes": ["gate.tokens.read"]}),
+        ))
+        .with_status(201)
         .with_header("content-type", "application/json")
         .with_body(r#"{"access_token":"tok_abc","expires_at":"2026-01-01T01:00:00Z","subject":"usr_123","tenant_id":"ten_001"}"#)
         .create_async()
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -417,7 +423,7 @@ async fn test_introspect_token() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -425,7 +431,7 @@ async fn test_introspect_token() {
     let info = gate.tokens().introspect("tok_abc").await.unwrap();
 
     assert!(info.active);
-    assert_eq!(info.subject, "usr_123");
+    assert_eq!(info.subject.as_deref(), Some("usr_123"));
     mock.assert_async().await;
 }
 
@@ -437,12 +443,12 @@ async fn test_authorize() {
         .mock("POST", "/v1/gate/authorize")
         .with_status(200)
         .with_header("content-type", "application/json")
-        .with_body(r#"{"allowed":true,"decision_id":"dec_001","reason":"policy matched"}"#)
+        .with_body(r#"{"allowed":true,"decision_id":"dec_001","reason":"subject `usr_123` is an identity owned by tenant `ten_001`"}"#)
         .create_async()
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -450,8 +456,8 @@ async fn test_authorize() {
     let decision = gate
         .authorize(AuthorizeParams {
             subject: "usr_123".into(),
-            action: "relay.messages.read".into(),
-            resource: "tenant:ten_001".into(),
+            action: "read".into(),
+            resource: "doc:1".into(),
             context: None,
         })
         .await
@@ -459,6 +465,12 @@ async fn test_authorize() {
 
     assert!(decision.allowed);
     assert_eq!(decision.decision_id, "dec_001");
+    // A sentence from a non-organization check lands in Other, and there is no role.
+    assert!(matches!(
+        decision.reason,
+        nautilus_rs::AuthorizeReason::Other(_)
+    ));
+    assert_eq!(decision.role, None);
     mock.assert_async().await;
 }
 
@@ -475,7 +487,7 @@ async fn test_gate_api_error() {
         .await;
 
     let gate = Gate::builder()
-        .api_key("vrn_gate_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();

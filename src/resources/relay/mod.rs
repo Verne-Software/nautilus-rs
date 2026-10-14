@@ -2,7 +2,13 @@ pub mod types;
 
 use std::sync::Arc;
 
-use crate::{error::Error, http::HttpClient, types::Paginated};
+use reqwest::Method;
+
+use crate::{
+    error::Error,
+    http::{Call, HttpClient},
+    types::Paginated,
+};
 use types::{ListMessagesParams, Message, SendMessageParams};
 
 /// Relay service client — Webhooks-as-a-Service.
@@ -16,12 +22,12 @@ use types::{ListMessagesParams, Message, SendMessageParams};
 /// ```no_run
 /// // Standalone
 /// use nautilus_rs::Relay;
-/// let relay = Relay::new("vrn_relay_live_sk_…");
+/// let relay = Relay::new("vrn_9f8a7c1b2d3e4f50");
 ///
 /// // Via unified client
 /// use nautilus_rs::Verne;
 /// # fn run() -> Result<(), nautilus_rs::Error> {
-/// let verne = Verne::builder().relay("vrn_relay_live_sk_…").build()?;
+/// let verne = Verne::builder().relay("vrn_9f8a7c1b2d3e4f50").build()?;
 /// let relay = verne.relay()?;
 /// # Ok(())
 /// # }
@@ -75,7 +81,7 @@ impl Relay {
 /// use nautilus_rs::Relay;
 ///
 /// let relay = Relay::builder()
-///     .api_key("vrn_relay_live_sk_…")
+///     .api_key("vrn_9f8a7c1b2d3e4f50")
 ///     .timeout_secs(15)
 ///     .build()
 ///     .expect("invalid configuration");
@@ -132,12 +138,16 @@ pub struct MessagesClient {
 impl MessagesClient {
     /// Send an event to all subscribed endpoints.
     ///
-    /// Maps to `POST /v1/relay/messages`. Retried once automatically on a 429,
-    /// respecting `Retry-After`.
+    /// Maps to `POST /v1/relay/messages`. A `429` whose `Retry-After` is 60 seconds or
+    /// less (or absent: one second) is waited out and retried once. A longer one is
+    /// returned at once with [`ApiError::retry_after`](crate::ApiError::retry_after) set,
+    /// and so is the monthly limit (`429 RELAY_MESSAGE_LIMIT_REACHED`, whose
+    /// `Retry-After` runs to the 1st of next month) — it is not something a retry fixes.
+    /// A `402` is never retried.
     ///
-    /// Safe to retry beyond that if
-    /// [`idempotency_key`](SendMessageParams::idempotency_key) is set: a repeat
-    /// returns the originally accepted message rather than creating a second
+    /// Safe to retry yourself if
+    /// [`idempotency_key`](SendMessageParams::idempotency_key) is set: for 12 hours a
+    /// repeat returns the originally accepted message rather than creating a second
     /// event or failing.
     ///
     /// # Example
@@ -147,7 +157,7 @@ impl MessagesClient {
     /// use serde_json::json;
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let relay = Relay::new("vrn_relay_live_sk_…");
+    /// let relay = Relay::new("vrn_9f8a7c1b2d3e4f50");
     /// let msg = relay.messages().send(SendMessageParams {
     ///     event_type: "user.signed_up".into(),
     ///     payload: json!({ "user_id": "usr_abc" }),
@@ -158,7 +168,7 @@ impl MessagesClient {
     /// # }
     /// ```
     pub async fn send(&self, params: SendMessageParams) -> Result<Message, Error> {
-        self.http.post("/v1/relay/messages", &params, false).await
+        self.http.post("/v1/relay/messages", &params).await
     }
 
     /// Retrieve a paginated list of past messages.
@@ -171,7 +181,7 @@ impl MessagesClient {
     /// use nautilus_rs::{Relay, ListMessagesParams};
     ///
     /// # async fn run() -> Result<(), nautilus_rs::Error> {
-    /// let relay = Relay::new("vrn_relay_live_sk_…");
+    /// let relay = Relay::new("vrn_9f8a7c1b2d3e4f50");
     /// let page = relay.messages().list(ListMessagesParams {
     ///     limit: Some(20),
     ///     event_type: Some("order.placed".into()),
@@ -185,23 +195,10 @@ impl MessagesClient {
     /// # }
     /// ```
     pub async fn list(&self, params: ListMessagesParams) -> Result<Paginated<Message>, Error> {
-        let mut query = vec![];
-        if let Some(limit) = params.limit {
-            query.push(format!("limit={limit}"));
-        }
-        if let Some(cursor) = &params.cursor {
-            query.push(format!("cursor={cursor}"));
-        }
-        if let Some(event_type) = &params.event_type {
-            query.push(format!("event_type={event_type}"));
-        }
-
-        let path = if query.is_empty() {
-            "/v1/relay/messages".to_string()
-        } else {
-            format!("/v1/relay/messages?{}", query.join("&"))
-        };
-
-        self.http.get(&path).await
+        let call = Call::new(Method::GET, "/v1/relay/messages")
+            .query("limit", params.limit)
+            .query("cursor", params.cursor)
+            .query("event_type", params.event_type);
+        self.http.send(call).await
     }
 }
