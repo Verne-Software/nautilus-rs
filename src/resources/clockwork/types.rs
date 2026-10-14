@@ -77,6 +77,43 @@ pub struct Execution {
     pub response_body: Option<String>,
     /// Error message, if the execution failed.
     pub error_message: Option<String>,
+    /// Which attempt of the run this row is, from 1. A retried run has one row per
+    /// attempt.
+    #[serde(default)]
+    pub attempt: Option<u32>,
+}
+
+/// Where the tenant stands against its plan's job limits, from
+/// [`Clockwork::usage`](super::Clockwork::usage).
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct ClockworkUsage {
+    /// The plan name.
+    pub plan: String,
+    /// The plan tier; the API sends the same value as `plan` today.
+    #[serde(default)]
+    pub tier: Option<String>,
+    /// Recurring jobs.
+    pub cron: CronUsage,
+    /// One-off jobs.
+    pub delayed: DelayedUsage,
+}
+
+/// Recurring-job usage in [`ClockworkUsage`].
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct CronUsage {
+    /// Active cron jobs.
+    pub active: u64,
+    /// The plan's limit, `None` for no limit.
+    pub limit: Option<u64>,
+}
+
+/// One-off-job usage in [`ClockworkUsage`].
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct DelayedUsage {
+    /// Delayed jobs not yet run.
+    pub pending: u64,
+    /// The plan's limit, `None` for no limit.
+    pub limit: Option<u64>,
 }
 
 /// Parameters for [`CronJobsClient::create`](super::CronJobsClient::create).
@@ -87,7 +124,7 @@ pub struct Execution {
 /// use nautilus_rs::{Clockwork, CreateCronJobParams};
 ///
 /// # async fn run() -> Result<(), nautilus_rs::Error> {
-/// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+/// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
 /// let job = clockwork.jobs().create(CreateCronJobParams {
 ///     name: "nightly-report".into(),
 ///     schedule: "0 2 * * *".into(),
@@ -153,7 +190,7 @@ pub struct UpdateCronJobParams {
 /// use nautilus_rs::{Clockwork, CreateDelayedJobParams};
 ///
 /// # async fn run() -> Result<(), nautilus_rs::Error> {
-/// let clockwork = Clockwork::new("vrn_clockwork_live_sk_…");
+/// let clockwork = Clockwork::new("vrn_9f8a7c1b2d3e4f50");
 /// let job = clockwork.delayed().create(CreateDelayedJobParams {
 ///     name: "send-reminder".into(),
 ///     run_at: "2026-01-01T12:00:00Z".into(),

@@ -28,7 +28,7 @@ pub struct Message {
 /// use serde_json::json;
 ///
 /// # async fn run() -> Result<(), nautilus_rs::Error> {
-/// let relay = Relay::new("vrn_relay_live_sk_…");
+/// let relay = Relay::new("vrn_9f8a7c1b2d3e4f50");
 /// let msg = relay.messages().send(SendMessageParams {
 ///     event_type: "order.placed".into(),
 ///     payload: json!({ "order_id": "ord_123", "total": 49.99 }),
@@ -44,7 +44,7 @@ pub struct SendMessageParams {
     pub event_type: String,
     /// Arbitrary JSON payload delivered to all subscribed endpoints.
     pub payload: serde_json::Value,
-    /// Optional idempotency key, deduplicating within a 24-hour window.
+    /// Optional idempotency key, deduplicating within a 12-hour window.
     ///
     /// Reusing the same key returns the *originally* accepted message — same
     /// `id`, same `timestamp` — rather than creating a second event or

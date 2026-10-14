@@ -14,7 +14,7 @@ async fn test_send_message() {
         .await;
 
     let relay = Relay::builder()
-        .api_key("vrn_relay_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -48,7 +48,7 @@ async fn test_send_message_with_all_params() {
         .await;
 
     let relay = Relay::builder()
-        .api_key("vrn_relay_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -81,7 +81,7 @@ async fn test_list_messages() {
         .await;
 
     let relay = Relay::builder()
-        .api_key("vrn_relay_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -115,7 +115,7 @@ async fn test_send_message_api_error() {
         .await;
 
     let relay = Relay::builder()
-        .api_key("vrn_relay_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();
@@ -164,7 +164,7 @@ async fn test_send_message_retries_on_429() {
         .await;
 
     let relay = Relay::builder()
-        .api_key("vrn_relay_test_sk_abc")
+        .api_key("vrn_9f8a7c1b2d3e4f50")
         .base_url(server.url())
         .build()
         .unwrap();

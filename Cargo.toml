@@ -1,6 +1,6 @@
 [package]
 name = "nautilus-rs"
-version = "1.3.0"
+version = "1.4.0"
 edition = "2021"
 rust-version = "1.75"
 description = "Official Rust SDK for the Verne Nautilus platform"
@@ -21,6 +21,25 @@ serde_json = "1"
 thiserror = "2"
 tokio = { version = "1", features = ["time"] }
 
+# Signed-token (JWT) verification, behind the `jwt` feature. `aws-lc-rs` is the crypto
+# provider reqwest's rustls already compiles, so the feature adds no crate to the build;
+# `base64` is already in the tree through hyper-util.
+aws-lc-rs = { version = "1", default-features = false, features = ["aws-lc-sys"], optional = true }
+base64 = { version = "0.22", optional = true }
+
+[features]
+default = []
+# `GateTokenVerifier` and `gate.tokens().verify_signed(…)`: offline ES256 verification of
+# the signed tokens Gate mints.
+jwt = ["dep:aws-lc-rs", "dep:base64"]
+
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros"] }
 mockito = "1"
+# Sign test tokens with locally generated P-256 keys (tests/jwt_test.rs).
+aws-lc-rs = "1"
+base64 = "0.22"
+
+[[test]]
+name = "jwt_test"
+required-features = ["jwt"]

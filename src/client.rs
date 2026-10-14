@@ -8,10 +8,22 @@ use crate::{
 
 /// Builder for the unified [`Verne`] client.
 ///
-/// Obtain one via [`Verne::builder()`]. All setter methods are chainable. At
-/// least one of [`relay`](VerneBuilder::relay), [`gate`](VerneBuilder::gate),
-/// or [`passepartout`](VerneBuilder::passepartout) must be set; calling
-/// [`build`](VerneBuilder::build) with none is valid but the resulting client
+/// Obtain one via [`Verne::builder()`]. All setter methods are chainable.
+///
+/// A key is `vrn_…` and carries a set of scopes (`relay`, `gate`, `clockwork`,
+/// `passepartout`) chosen when it is created on Dashboard → Keys. **Pass one key with
+/// [`api_key`](Self::api_key)** and use every service its scopes allow; a call to a
+/// service the key has no scope for is refused by the API with `403 forbidden`. The SDK
+/// does not check scopes and does not parse the key.
+///
+/// The per-service setters ([`relay`](Self::relay), [`gate`](Self::gate),
+/// [`passepartout`](Self::passepartout), [`clockwork`](Self::clockwork)) remain, and
+/// **override** `api_key` for that one service — for different keys per service, or for
+/// older `vrn_<engine>_…` keys, which still work and open that one engine.
+///
+/// There is no test/live environment and no sandbox: use a separate key per environment.
+///
+/// [`build`](VerneBuilder::build) with no key at all is valid, but the resulting client
 /// will return [`Error::Config`] for every service accessor.
 ///
 /// # Example
@@ -20,14 +32,14 @@ use crate::{
 /// use nautilus_rs::Verne;
 ///
 /// let verne = Verne::builder()
-///     .relay("vrn_relay_live_sk_…")
-///     .gate("vrn_gate_live_sk_…")
+///     .api_key("vrn_9f8a7c1b2d3e4f50")
 ///     .timeout_secs(10)
 ///     .build()
 ///     .expect("invalid configuration");
 /// ```
 #[derive(Default)]
 pub struct VerneBuilder {
+    api_key: Option<String>,
     relay_key: Option<String>,
     gate_key: Option<String>,
     passepartout_key: Option<String>,
@@ -37,25 +49,31 @@ pub struct VerneBuilder {
 }
 
 impl VerneBuilder {
-    /// Set the Relay service API key (`vrn_relay_<env>_sk_…`).
+    /// Set the one API key (`vrn_…`) used for every service that has no key of its own.
+    pub fn api_key(mut self, key: impl Into<String>) -> Self {
+        self.api_key = Some(key.into());
+        self
+    }
+
+    /// Set a key for Relay only, overriding [`api_key`](Self::api_key).
     pub fn relay(mut self, key: impl Into<String>) -> Self {
         self.relay_key = Some(key.into());
         self
     }
 
-    /// Set the Gate service API key (`vrn_gate_<env>_sk_…`).
+    /// Set a key for Gate only, overriding [`api_key`](Self::api_key).
     pub fn gate(mut self, key: impl Into<String>) -> Self {
         self.gate_key = Some(key.into());
         self
     }
 
-    /// Set the Passepartout service API key (`vrn_passepartout_<env>_sk_…`).
+    /// Set a key for Passepartout only, overriding [`api_key`](Self::api_key).
     pub fn passepartout(mut self, key: impl Into<String>) -> Self {
         self.passepartout_key = Some(key.into());
         self
     }
 
-    /// Set the Clockwork service API key (`vrn_clockwork_<env>_sk_…`).
+    /// Set a key for Clockwork only, overriding [`api_key`](Self::api_key).
     pub fn clockwork(mut self, key: impl Into<String>) -> Self {
         self.clockwork_key = Some(key.into());
         self
@@ -63,8 +81,7 @@ impl VerneBuilder {
 
     /// Override the API base URL (default: `https://api.vernesoft.com`).
     ///
-    /// Useful for pointing at a staging environment or a local mock server
-    /// during tests.
+    /// Useful for pointing at a local stack or a mock server during tests.
     pub fn base_url(mut self, url: impl Into<String>) -> Self {
         self.base_url = Some(url.into());
         self
@@ -81,37 +98,21 @@ impl VerneBuilder {
     /// Returns [`Error::Config`] if the underlying HTTP client cannot be
     /// initialised (e.g. invalid TLS configuration).
     pub fn build(self) -> Result<Verne, Error> {
-        let relay = self
-            .relay_key
-            .map(|key| {
-                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
-                Ok::<_, Error>(Arc::new(Relay::from_http(Arc::new(http))))
-            })
-            .transpose()?;
+        let shared = self.api_key.as_ref();
+        let http = |own: Option<&String>| {
+            own.or(shared)
+                .map(|key| {
+                    HttpClient::new(key, self.base_url.clone(), self.timeout_secs).map(Arc::new)
+                })
+                .transpose()
+        };
 
-        let gate = self
-            .gate_key
-            .map(|key| {
-                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
-                Ok::<_, Error>(Arc::new(Gate::from_http(Arc::new(http), key)))
-            })
-            .transpose()?;
-
-        let passepartout = self
-            .passepartout_key
-            .map(|key| {
-                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
-                Ok::<_, Error>(Arc::new(Passepartout::from_http(Arc::new(http), key)))
-            })
-            .transpose()?;
-
-        let clockwork = self
-            .clockwork_key
-            .map(|key| {
-                let http = HttpClient::new(&key, self.base_url.clone(), self.timeout_secs)?;
-                Ok::<_, Error>(Arc::new(Clockwork::from_http(Arc::new(http))))
-            })
-            .transpose()?;
+        let relay = http(self.relay_key.as_ref())?.map(|http| Arc::new(Relay::from_http(http)));
+        let gate = http(self.gate_key.as_ref())?.map(|http| Arc::new(Gate::from_http(http)));
+        let passepartout = http(self.passepartout_key.as_ref())?
+            .map(|http| Arc::new(Passepartout::from_http(http)));
+        let clockwork =
+            http(self.clockwork_key.as_ref())?.map(|http| Arc::new(Clockwork::from_http(http)));
 
         Ok(Verne {
             relay,
@@ -124,8 +125,8 @@ impl VerneBuilder {
 
 /// Unified entry point for the Verne Nautilus platform SDK.
 ///
-/// Holds optional, cheaply-cloneable handles to the [`Relay`] and [`Gate`]
-/// services. Construct it with [`Verne::builder()`].
+/// Holds optional, cheaply-cloneable handles to the [`Relay`], [`Gate`],
+/// [`Passepartout`] and [`Clockwork`] services. Construct it with [`Verne::builder()`].
 ///
 /// # Example
 ///
@@ -133,10 +134,7 @@ impl VerneBuilder {
 /// use nautilus_rs::Verne;
 ///
 /// # async fn run() -> Result<(), nautilus_rs::Error> {
-/// let verne = Verne::builder()
-///     .relay("vrn_relay_live_sk_…")
-///     .gate("vrn_gate_live_sk_…")
-///     .build()?;
+/// let verne = Verne::builder().api_key("vrn_9f8a7c1b2d3e4f50").build()?;
 ///
 /// let relay = verne.relay()?;
 /// let gate  = verne.gate()?;
@@ -160,47 +158,59 @@ impl Verne {
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Config`] if no Relay API key was provided at build
-    /// time.
+    /// Returns [`Error::Config`] if neither `api_key` nor a Relay key was provided at
+    /// build time.
     pub fn relay(&self) -> Result<&Relay, Error> {
-        self.relay
-            .as_deref()
-            .ok_or_else(|| Error::Config("no relay API key configured".into()))
+        self.relay.as_deref().ok_or_else(|| {
+            Error::Config(
+                "no relay API key configured: set `api_key` (one key for every service) or `relay`"
+                    .into(),
+            )
+        })
     }
 
     /// Return a reference to the [`Gate`] service.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Config`] if no Gate API key was provided at build
-    /// time.
+    /// Returns [`Error::Config`] if neither `api_key` nor a Gate key was provided at
+    /// build time.
     pub fn gate(&self) -> Result<&Gate, Error> {
-        self.gate
-            .as_deref()
-            .ok_or_else(|| Error::Config("no gate API key configured".into()))
+        self.gate.as_deref().ok_or_else(|| {
+            Error::Config(
+                "no gate API key configured: set `api_key` (one key for every service) or `gate`"
+                    .into(),
+            )
+        })
     }
 
     /// Return a reference to the [`Passepartout`] service.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Config`] if no Passepartout API key was provided at
+    /// Returns [`Error::Config`] if neither `api_key` nor a Passepartout key was provided at
     /// build time.
     pub fn passepartout(&self) -> Result<&Passepartout, Error> {
         self.passepartout
             .as_deref()
-            .ok_or_else(|| Error::Config("no passepartout API key configured".into()))
+            .ok_or_else(|| Error::Config(
+                "no passepartout API key configured: set `api_key` (one key for every service) or `passepartout`"
+                    .into(),
+            ))
     }
 
     /// Return a reference to the [`Clockwork`] service.
     ///
     /// # Errors
     ///
-    /// Returns [`Error::Config`] if no Clockwork API key was provided at build
-    /// time.
+    /// Returns [`Error::Config`] if neither `api_key` nor a Clockwork key was provided at
+    /// build time.
     pub fn clockwork(&self) -> Result<&Clockwork, Error> {
         self.clockwork
             .as_deref()
-            .ok_or_else(|| Error::Config("no clockwork API key configured".into()))
+            .ok_or_else(|| Error::Config(
+                "no clockwork API key configured: set `api_key` (one key for every service) or `clockwork`"
+                    .into(),
+            ))
     }
 }

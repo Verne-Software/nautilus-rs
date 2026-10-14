@@ -55,6 +55,9 @@ pub struct LoginStatus {
 
 /// Token validity and claims returned by
 /// [`Passepartout::introspect`](super::Passepartout::introspect).
+///
+/// An inactive token is `{"active": false}` and nothing else: every other field is
+/// `None`.
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct TokenIntrospection {
     /// `true` if the token is valid, unexpired, and not revoked.
@@ -71,4 +74,13 @@ pub struct TokenIntrospection {
     /// ISO 8601 expiry timestamp.
     #[serde(default)]
     pub expires_at: Option<String>,
+    /// When `subject` is an end user's id: their organizations in the key's project, read
+    /// live, the first 100 in the order they joined. `None` when the subject is not an
+    /// end user's id, and for an inactive token.
+    #[serde(default)]
+    pub orgs: Option<Vec<crate::OrgClaim>>,
+    /// `Some(true)`, and only then, when there are more than 100; list them with
+    /// [`IdentitiesClient::list_organizations`](crate::IdentitiesClient::list_organizations).
+    #[serde(default)]
+    pub orgs_truncated: Option<bool>,
 }
