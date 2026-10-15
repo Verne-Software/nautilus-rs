@@ -1,4 +1,5 @@
-//! Official Rust SDK for the Verne Nautilus platform.
+//! Official Rust SDK for Nautilus by Verne Software. Hosted in France; documentation at
+//! <https://docs.vernesoft.com>.
 //!
 //! Provides four services behind a single unified client:
 //!

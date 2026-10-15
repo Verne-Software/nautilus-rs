@@ -4,7 +4,15 @@ All notable changes to `nautilus-rs`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.4.0] — unreleased
+## [1.4.1] — unreleased
+
+### Changed
+
+- Package description and README opening name the product as Nautilus by Verne
+  Software; registry metadata (homepage, documentation, keywords). No code changes.
+  The crate documentation (docs.rs) names the product the same way.
+
+## [1.4.0] — 2026-10-14
 
 ### Added
 

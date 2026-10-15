@@ -5,7 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](#)
 
-The official Rust SDK for the [Verne Nautilus](https://vernesoft.com) platform: Relay (webhooks), Gate (auth, organizations, sessions, signed tokens), Passepartout (Telegram sign-in) and Clockwork (cron).
+The official Rust library for [Nautilus by Verne Software](https://vernesoft.com): sign-in and users, webhook delivery, cron jobs and Telegram sign-in, behind one API key. Nautilus runs on servers in France. Documentation: [docs.vernesoft.com](https://docs.vernesoft.com).
+
+In the client the four services keep their API names: Gate (sign-in and users, organizations, sessions, signed tokens), Relay (webhooks), Clockwork (cron) and Passepartout (Telegram sign-in).
 
 > **Server-side only.** API keys carry full access to the services their scopes name and must never be used in WASM or client-side contexts.
 

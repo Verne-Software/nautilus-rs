@@ -123,7 +123,7 @@ impl VerneBuilder {
     }
 }
 
-/// Unified entry point for the Verne Nautilus platform SDK.
+/// Unified entry point for the Nautilus SDK (Nautilus by Verne Software).
 ///
 /// Holds optional, cheaply-cloneable handles to the [`Relay`], [`Gate`],
 /// [`Passepartout`] and [`Clockwork`] services. Construct it with [`Verne::builder()`].
