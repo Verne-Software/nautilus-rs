@@ -7,8 +7,13 @@ pub struct CronJob {
     pub tenant_id: String,
     /// Human-readable name for the job.
     pub name: String,
-    /// Cron expression describing the schedule (e.g. `"0 * * * *"`).
+    /// Cron expression describing the schedule (e.g. `"0 * * * *"`), read in
+    /// [`timezone`](Self::timezone).
     pub schedule: String,
+    /// IANA time zone the schedule is read in, e.g. `"Europe/Paris"`; `"UTC"` unless set.
+    /// [`next_run_at`](Self::next_run_at) and every other timestamp stay in UTC.
+    #[serde(default = "utc")]
+    pub timezone: String,
     /// URL invoked on each run.
     pub url: String,
     /// HTTP method used for the request (e.g. `"POST"`).
@@ -27,6 +32,10 @@ pub struct CronJob {
     pub created_at: String,
     /// ISO 8601 timestamp of when the job was last updated.
     pub updated_at: String,
+}
+
+fn utc() -> String {
+    "UTC".to_owned()
 }
 
 /// A one-off delayed job returned by the Clockwork API.
@@ -140,6 +149,11 @@ pub struct CreateCronJobParams {
     pub name: String,
     /// Cron expression describing the schedule (e.g. `"0 * * * *"`).
     pub schedule: String,
+    /// IANA time zone to read `schedule` in, e.g. `"Europe/Paris"`: `"0 9 * * *"` is then
+    /// 09:00 in Paris all year round, across daylight-saving changes. `"UTC"` when `None`.
+    /// An unknown name (or an offset such as `"+02:00"`) is `400 invalid_payload`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
     /// URL to invoke on each run.
     pub url: String,
     /// HTTP method used for the request (server default applies when `None`).
@@ -165,6 +179,9 @@ pub struct UpdateCronJobParams {
     /// New cron expression describing the schedule.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub schedule: Option<String>,
+    /// New IANA time zone, e.g. `"Europe/Paris"`. Recomputes `next_run_at` at once.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
     /// New URL to invoke on each run.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
