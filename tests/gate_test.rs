@@ -545,7 +545,8 @@ async fn test_create_identity_for_an_import() {
                 IdentityCredentials::hashed_password(
                     "$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG",
                 )
-                .with_oidc_provider("google", "109876543210987654321"),
+                .with_oidc_provider("google", "109876543210987654321")
+                .into(),
             ),
             email_verified: Some(true),
             metadata_public: Some(serde_json::json!({ "previous_user_id": "auth0|64f1c0ffee" })),
@@ -568,4 +569,56 @@ fn test_identity_credentials_password_serializes_without_the_hash() {
         serde_json::to_value(IdentityCredentials::password("Secret123!")).unwrap(),
         serde_json::json!({ "password": { "config": { "password": "Secret123!" } } })
     );
+}
+
+/// 1.4.1 code — `credentials` as hand-written JSON, every field named — still compiles
+/// (with the two new fields) and sends the same body as the typed builder.
+#[tokio::test]
+async fn test_json_credentials_as_in_1_4_1_still_work_and_match_the_builder() {
+    let old_style = CreateIdentityParams {
+        schema_id: "user".into(),
+        traits: IdentityTraitsInput {
+            email: "user@example.com".into(),
+            locale: None,
+        },
+        credentials: Some(
+            serde_json::json!({ "password": { "config": { "password": "Secret123!" } } }),
+        ),
+        state: None,
+        email_verified: None,
+        metadata_public: None,
+    };
+    let typed = CreateIdentityParams {
+        schema_id: "user".into(),
+        traits: IdentityTraitsInput {
+            email: "user@example.com".into(),
+            locale: None,
+        },
+        credentials: Some(IdentityCredentials::password("Secret123!").into()),
+        ..Default::default()
+    };
+    let expected = serde_json::json!({
+        "schema_id": "user",
+        "traits": { "email": "user@example.com" },
+        "credentials": { "password": { "config": { "password": "Secret123!" } } }
+    });
+    assert_eq!(serde_json::to_value(&old_style).unwrap(), expected);
+    assert_eq!(serde_json::to_value(&typed).unwrap(), expected);
+
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/v1/gate/identities")
+        .match_body(mockito::Matcher::Json(expected))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(identity_json("idn_003"))
+        .create_async()
+        .await;
+    let gate = Gate::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+    gate.identities().create(old_style).await.unwrap();
+    mock.assert_async().await;
 }

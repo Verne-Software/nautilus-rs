@@ -126,7 +126,7 @@ pub struct IdentityTraitsInput {
 ///         email: "alice@example.com".into(),
 ///         locale: Some("en".into()),
 ///     },
-///     credentials: Some(IdentityCredentials::password("StrongPassword123!")),
+///     credentials: Some(IdentityCredentials::password("StrongPassword123!").into()),
 ///     ..Default::default()
 /// }).await?;
 /// println!("created: {}", identity.id);
@@ -150,7 +150,8 @@ pub struct IdentityTraitsInput {
 ///     traits: IdentityTraitsInput { email: "ada@example.com".into(), locale: None },
 ///     credentials: Some(
 ///         IdentityCredentials::hashed_password("$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG")
-///             .with_oidc_provider("google", "109876543210987654321"),
+///             .with_oidc_provider("google", "109876543210987654321")
+///             .into(),
 ///     ),
 ///     email_verified: Some(true),
 ///     metadata_public: Some(json!({ "previous_user_id": "auth0|64f1c0ffee" })),
@@ -167,9 +168,10 @@ pub struct CreateIdentityParams {
     /// Profile traits for the new identity.
     pub traits: IdentityTraitsInput,
     /// The initial password (or a bcrypt hash of an existing one) and the social accounts
-    /// to link.
+    /// to link, e.g. `{"password": {"config": {"password": "…"}}}`. Build it typed with
+    /// [`IdentityCredentials`] and `.into()`, or write the JSON yourself.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub credentials: Option<IdentityCredentials>,
+    pub credentials: Option<Value>,
     /// Initial lifecycle state (`"active"` or `"inactive"`). Defaults to the schema
     /// default when `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -185,16 +187,17 @@ pub struct CreateIdentityParams {
     pub metadata_public: Option<Value>,
 }
 
-/// Credentials of a new identity, in [`CreateIdentityParams::credentials`]: a password or
-/// its bcrypt hash, and the social accounts to link.
+/// A typed builder for [`CreateIdentityParams::credentials`]: a password or its bcrypt
+/// hash, and the social accounts to link. Converts into the JSON the field holds.
 ///
 /// ```
 /// use nautilus_rs::IdentityCredentials;
 ///
-/// let credentials = IdentityCredentials::hashed_password("$2b$10$…")
-///     .with_oidc_provider("google", "109876543210987654321");
+/// let credentials: serde_json::Value = IdentityCredentials::hashed_password("$2b$10$…")
+///     .with_oidc_provider("google", "109876543210987654321")
+///     .into();
 /// assert_eq!(
-///     serde_json::to_value(&credentials).unwrap(),
+///     credentials,
 ///     serde_json::json!({
 ///         "password": { "config": { "hashed_password": "$2b$10$…" } },
 ///         "oidc": { "config": { "providers": [
@@ -258,6 +261,13 @@ impl IdentityCredentials {
                 subject: subject.into(),
             });
         self
+    }
+}
+
+impl From<IdentityCredentials> for Value {
+    fn from(credentials: IdentityCredentials) -> Self {
+        // Plain strings, options and vectors: serializing them cannot fail.
+        serde_json::to_value(credentials).expect("IdentityCredentials serializes to JSON")
     }
 }
 

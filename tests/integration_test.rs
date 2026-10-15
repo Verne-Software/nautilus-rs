@@ -254,7 +254,7 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
                 email: email("member"),
                 locale: None,
             },
-            credentials: Some(IdentityCredentials::password(member_password.clone())),
+            credentials: Some(json!({"password": {"config": {"password": member_password}}})),
             state: None,
             ..Default::default()
         })
@@ -1157,7 +1157,7 @@ async fn identity_import_against_a_live_stack() {
                 email: address.clone(),
                 locale: None,
             },
-            credentials: Some(IdentityCredentials::hashed_password(IMPORTED_HASH)),
+            credentials: Some(IdentityCredentials::hashed_password(IMPORTED_HASH).into()),
             email_verified: Some(true),
             metadata_public: Some(json!({ "previous_user_id": "auth0|sdk-104" })),
             ..Default::default()

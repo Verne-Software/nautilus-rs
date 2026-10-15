@@ -141,7 +141,7 @@ let gate = verne.gate()?;
 let user = gate.identities().create(CreateIdentityParams {
     schema_id: "user".into(),
     traits: IdentityTraitsInput { email: "user@example.com".into(), locale: Some("en".into()) },
-    credentials: Some(IdentityCredentials::password("StrongPassword123!")),
+    credentials: Some(IdentityCredentials::password("StrongPassword123!").into()), // or json!({…})
     ..Default::default() // state, email_verified, metadata_public
 }).await?;
 
@@ -175,7 +175,8 @@ let imported = gate.identities().create(CreateIdentityParams {
     traits: IdentityTraitsInput { email: "ada@example.com".into(), locale: None },
     credentials: Some(
         IdentityCredentials::hashed_password("$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG")
-            .with_oidc_provider("google", "109876543210987654321"),
+            .with_oidc_provider("google", "109876543210987654321")
+            .into(),
     ),
     email_verified: Some(true), // the address starts confirmed; Gate sends no mail to check it
     metadata_public: Some(json!({ "previous_user_id": "auth0|64f1c0ffee" })),
