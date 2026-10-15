@@ -1,14 +1,16 @@
 [package]
 name = "nautilus-rs"
-version = "1.4.0"
+version = "1.4.1"
 edition = "2021"
 rust-version = "1.75"
-description = "Official Rust SDK for the Verne Nautilus platform"
+description = "Official Rust SDK for Nautilus by Verne Software: sign-in and users, webhook delivery, cron jobs and Telegram sign-in. Hosted in France."
 license = "MIT"
+homepage = "https://vernesoft.com"
 documentation = "https://docs.rs/nautilus-rs"
 repository = "https://github.com/Verne-Software/nautilus-rs"
-keywords = ["nautilus", "webhook", "relay", "auth", "gate"]
-categories = ["api-bindings", "web-programming::http-client"]
+readme = "README.md"
+keywords = ["authentication", "webhooks", "cron", "telegram-login", "sdk"]
+categories = ["api-bindings", "authentication", "web-programming::http-client"]
 
 [package.metadata.docs.rs]
 all-features = true
