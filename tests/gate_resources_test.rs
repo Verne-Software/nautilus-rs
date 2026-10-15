@@ -73,6 +73,7 @@ async fn create_identity_sends_email_and_locale_and_no_custom_data() {
             },
             credentials: None,
             state: None,
+            ..Default::default()
         })
         .await
         .unwrap();

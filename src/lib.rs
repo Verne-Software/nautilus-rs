@@ -18,7 +18,7 @@
 //!
 //! ```toml
 //! [dependencies]
-//! nautilus-rs = "1.4"
+//! nautilus-rs = "1.5"
 //! tokio = { version = "1", features = ["full"] }
 //! ```
 //!
@@ -118,10 +118,11 @@ pub use resources::relay::{MessagesClient, Relay, RelayBuilder};
 pub use resources::gate::types::{
     AccessToken, AddMemberParams, AuditActor, AuditLogEntry, AuditTarget, AuthenticationMethod,
     AuthorizationDecision, AuthorizeParams, AuthorizeReason, CreateIdentityParams,
-    CreateOrganizationParams, CreateRoleParams, CreateTokenParams, Identity, IdentityTraits,
-    IdentityTraitsInput, JsonPatchOp, LifecycleAction, LifecycleRule, LifecycleRuleKind,
-    LifecycleRules, ListAuditLogParams, ListLifecycleActionsParams, LoginFlowParams, Member,
-    OidcExchangeResult, OidcProvider, OrgClaim, Organization, RecoveryAddress,
+    CreateOrganizationParams, CreateRoleParams, CreateTokenParams, Identity, IdentityCredentials,
+    IdentityTraits, IdentityTraitsInput, JsonPatchOp, LifecycleAction, LifecycleRule,
+    LifecycleRuleKind, LifecycleRules, ListAuditLogParams, ListLifecycleActionsParams,
+    LoginFlowParams, Member, OidcConfig, OidcCredential, OidcExchangeResult, OidcProvider,
+    OidcProviderLink, OrgClaim, Organization, PasswordConfig, PasswordCredential, RecoveryAddress,
     RegistrationFlowParams, Role, RulePreview, SecuritySettings, Session, SessionCheck,
     SessionDevice, SetRuleParams, SignedToken, SignedTokenClaims, TokenInfo, UpdateMemberParams,
     UpdateOrganizationParams, UpdateRoleParams, VerifiableAddress,

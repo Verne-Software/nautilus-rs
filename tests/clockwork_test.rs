@@ -360,3 +360,149 @@ async fn test_execution_attempt() {
     // Rows from before the field existed simply have none.
     assert_eq!(executions[1].attempt, None);
 }
+
+#[tokio::test]
+async fn test_create_job_with_timezone() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("POST", "/v1/clockwork/jobs")
+        .match_body(mockito::Matcher::Json(serde_json::json!({
+            "name": "morning",
+            "schedule": "0 9 * * *",
+            "timezone": "Europe/Paris",
+            "url": "https://example.com/hook"
+        })))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(
+            cron_job_json("job_tz")
+                .replace(
+                    r#""schedule":"0 2 * * *""#,
+                    r#""schedule":"0 9 * * *","timezone":"Europe/Paris""#,
+                )
+                .replace("2026-01-02T02:00:00Z", "2026-10-16T07:00:00Z"),
+        )
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let job = clockwork
+        .jobs()
+        .create(CreateCronJobParams {
+            name: "morning".into(),
+            schedule: "0 9 * * *".into(),
+            timezone: Some("Europe/Paris".into()),
+            url: "https://example.com/hook".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(job.timezone, "Europe/Paris");
+    assert_eq!(job.next_run_at.as_deref(), Some("2026-10-16T07:00:00Z"));
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_update_job_timezone_sends_only_the_zone() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("PATCH", "/v1/clockwork/jobs/job_001")
+        .match_body(r#"{"timezone":"America/New_York"}"#)
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(
+            cron_job_json("job_001")
+                .replace(r#""url":"#, r#""timezone":"America/New_York","url":"#),
+        )
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let job = clockwork
+        .jobs()
+        .update(
+            "job_001",
+            UpdateCronJobParams {
+                timezone: Some("America/New_York".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(job.timezone, "America/New_York");
+    mock.assert_async().await;
+}
+
+#[tokio::test]
+async fn test_a_job_without_timezone_in_the_answer_is_utc() {
+    let mut server = Server::new_async().await;
+
+    let _mock = server
+        .mock("GET", "/v1/clockwork/jobs")
+        .with_status(200)
+        .with_header("content-type", "application/json")
+        .with_body(format!("[{}]", cron_job_json("job_001")))
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    assert_eq!(clockwork.jobs().list().await.unwrap()[0].timezone, "UTC");
+}
+
+#[tokio::test]
+async fn test_an_unknown_timezone_is_400_invalid_payload() {
+    let mut server = Server::new_async().await;
+
+    let _mock = server
+        .mock("POST", "/v1/clockwork/jobs")
+        .with_status(400)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"error":{"code":"invalid_payload","message":"Unknown timezone \"Mars/Olympus\".","request_id":"req_tz"}}"#)
+        .create_async()
+        .await;
+
+    let clockwork = Clockwork::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let err = clockwork
+        .jobs()
+        .create(CreateCronJobParams {
+            name: "x".into(),
+            schedule: "0 9 * * *".into(),
+            timezone: Some("Mars/Olympus".into()),
+            url: "https://example.com".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap_err();
+
+    match err {
+        nautilus_rs::Error::Api(e) => {
+            assert_eq!(e.status, 400);
+            assert_eq!(e.code, "invalid_payload");
+        }
+        other => panic!("expected an API error, got {other:?}"),
+    }
+}

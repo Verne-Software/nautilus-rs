@@ -32,9 +32,10 @@ use std::{
 use nautilus_rs::{
     AddMemberParams, ApiError, AuthorizeParams, AuthorizeReason, CreateCronJobParams,
     CreateIdentityParams, CreateOrganizationParams, CreateRoleParams, CreateTokenParams, Error,
-    Gate, GateTokenVerifier, IdentityTraitsInput, LifecycleRuleKind, ListAuditLogParams,
-    ListLifecycleActionsParams, ListParams, LoginFlowParams, Passepartout, SecuritySettings,
-    SetRuleParams, TokenErrorReason, UpdateMemberParams, UpdateRoleParams, Verne,
+    Gate, GateTokenVerifier, IdentityCredentials, IdentityTraitsInput, LifecycleRuleKind,
+    ListAuditLogParams, ListLifecycleActionsParams, ListParams, LoginFlowParams, Passepartout,
+    SecuritySettings, SetRuleParams, TokenErrorReason, UpdateCronJobParams, UpdateMemberParams,
+    UpdateRoleParams, Verne,
 };
 use serde_json::json;
 
@@ -253,8 +254,9 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
                 email: email("member"),
                 locale: None,
             },
-            credentials: Some(json!({"password": {"config": {"password": member_password}}})),
+            credentials: Some(IdentityCredentials::password(member_password.clone())),
             state: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -269,6 +271,7 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
             },
             credentials: None,
             state: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -286,6 +289,7 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
                 },
                 credentials: None,
                 state: None,
+                ..Default::default()
             })
             .await,
         409,
@@ -790,6 +794,7 @@ async fn gate_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
             },
             credentials: None,
             state: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -1049,4 +1054,148 @@ async fn clockwork_and_passepartout_against_a_live_stack() {
             Some("forbidden"),
         );
     }
+}
+
+/// 1.5.0: a cron job keeps its time zone across create, list and update.
+#[tokio::test]
+#[ignore = "needs a running local stack and VERNE_API_KEY; see the module docs"]
+async fn clockwork_timezones_against_a_live_stack() {
+    let env = env();
+    let verne = Verne::builder()
+        .api_key(&env.key)
+        .base_url(&env.base_url)
+        .build()
+        .unwrap();
+    let jobs = verne.clockwork().unwrap().jobs();
+    let at_utc = |ts: &Option<String>, hour: &str| {
+        let ts = ts.as_deref().unwrap_or_default();
+        ts.contains(&format!("T{hour}:00:00")) && (ts.ends_with('Z') || ts.ends_with("+00:00"))
+    };
+
+    let job = jobs
+        .create(CreateCronJobParams {
+            name: format!("{}-tz", env.prefix),
+            schedule: "0 9 * * *".into(),
+            timezone: Some("Europe/Paris".into()),
+            url: "https://example.com/hooks/tz".into(),
+            method: Some("GET".into()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let listed = jobs
+        .list()
+        .await
+        .map(|all| all.into_iter().find(|j| j.id == job.id).map(|j| j.timezone));
+    let moved = jobs
+        .update(
+            &job.id,
+            UpdateCronJobParams {
+                timezone: Some("America/New_York".into()),
+                ..Default::default()
+            },
+        )
+        .await;
+    let unknown = jobs
+        .update(
+            &job.id,
+            UpdateCronJobParams {
+                timezone: Some("Mars/Olympus".into()),
+                ..Default::default()
+            },
+        )
+        .await;
+    jobs.delete(&job.id).await.unwrap();
+
+    assert_eq!(job.timezone, "Europe/Paris");
+    // 09:00 in Paris in October (CEST, UTC+2) is 07:00 UTC.
+    assert!(at_utc(&job.next_run_at, "07"), "{:?}", job.next_run_at);
+    assert_eq!(listed.unwrap().as_deref(), Some("Europe/Paris"));
+    let moved = moved.unwrap();
+    assert_eq!(moved.timezone, "America/New_York");
+    // 09:00 in New York in October (EDT, UTC-4) is 13:00 UTC.
+    assert!(at_utc(&moved.next_run_at, "13"), "{:?}", moved.next_run_at);
+    api(unknown, 400, Some("invalid_payload"));
+
+    // Without a zone a job is UTC.
+    let utc = jobs
+        .create(CreateCronJobParams {
+            name: format!("{}-utc", env.prefix),
+            schedule: "0 9 * * *".into(),
+            url: "https://example.com/hooks/utc".into(),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    jobs.delete(&utc.id).await.unwrap();
+    assert_eq!(utc.timezone, "UTC");
+}
+
+/// 1.5.0: an imported user — bcrypt hash, confirmed address, metadata — signs in with the
+/// original password.
+#[tokio::test]
+#[ignore = "needs a running local stack and VERNE_API_KEY; see the module docs"]
+async fn identity_import_against_a_live_stack() {
+    // bcrypt (cost 10) of IMPORTED_PASSWORD — a test value, nothing else.
+    const IMPORTED_PASSWORD: &str = "Imported-Pw-104!";
+    const IMPORTED_HASH: &str = "$2b$10$Ky/GcB0gC9sEpv84tO7.Wuxp7RsfSWrDYtz7M5iU4akOb3O5Y1Kq2";
+
+    let env = env();
+    let verne = Verne::builder()
+        .api_key(&env.key)
+        .base_url(&env.base_url)
+        .build()
+        .unwrap();
+    let gate = verne.gate().unwrap();
+    let address = format!("{}-import@e2e.soft.com", env.prefix);
+
+    let identity = gate
+        .identities()
+        .create(CreateIdentityParams {
+            schema_id: "user".into(),
+            traits: IdentityTraitsInput {
+                email: address.clone(),
+                locale: None,
+            },
+            credentials: Some(IdentityCredentials::hashed_password(IMPORTED_HASH)),
+            email_verified: Some(true),
+            metadata_public: Some(json!({ "previous_user_id": "auth0|sdk-104" })),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    let fetched = gate.identities().get(&identity.id).await;
+    let session_token = {
+        let flow = gate.create_login_flow().await.unwrap();
+        let action = flow["ui"]["action"]
+            .as_str()
+            .expect("flow ui.action")
+            .to_owned();
+        let res = reqwest::Client::new()
+            .post(action)
+            .header("Accept", "application/json")
+            .json(&json!({"method": "password", "identifier": address, "password": IMPORTED_PASSWORD}))
+            .send()
+            .await
+            .unwrap();
+        let status = res.status();
+        let body: serde_json::Value = res.json().await.unwrap();
+        (status, body["session_token"].as_str().map(str::to_owned))
+    };
+    gate.identities().delete(&identity.id).await.unwrap();
+
+    let address = &identity.verifiable_addresses[0];
+    assert!(address.verified);
+    assert_eq!(address.status.as_deref(), Some("completed"));
+    assert_eq!(
+        identity.metadata_public,
+        Some(json!({ "previous_user_id": "auth0|sdk-104" }))
+    );
+    assert!(fetched.unwrap().verifiable_addresses[0].verified);
+    assert_eq!(
+        session_token.0.as_u16(),
+        200,
+        "login with the original password"
+    );
+    assert!(session_token.1.is_some());
 }

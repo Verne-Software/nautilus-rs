@@ -21,11 +21,11 @@ Rust 1.75 or later, and a Tokio runtime.
 
 ```toml
 [dependencies]
-nautilus-rs = "1.4"
+nautilus-rs = "1.5"
 tokio = { version = "1", features = ["full"] }
 
 # to verify Gate's signed tokens (JWT) offline:
-# nautilus-rs = { version = "1.4", features = ["jwt"] }
+# nautilus-rs = { version = "1.5", features = ["jwt"] }
 ```
 
 ## API keys
@@ -133,7 +133,7 @@ let page = verne.relay()?.messages().list(ListMessagesParams {
 An end user has two traits: `email` (required) and `locale`. **Application data does not go in traits** — the schema refuses anything else with `400`. Keep your own fields in custom metadata:
 
 ```rust
-use nautilus_rs::{CreateIdentityParams, IdentityTraitsInput, JsonPatchOp};
+use nautilus_rs::{CreateIdentityParams, IdentityCredentials, IdentityTraitsInput, JsonPatchOp};
 use serde_json::json;
 
 let gate = verne.gate()?;
@@ -141,8 +141,8 @@ let gate = verne.gate()?;
 let user = gate.identities().create(CreateIdentityParams {
     schema_id: "user".into(),
     traits: IdentityTraitsInput { email: "user@example.com".into(), locale: Some("en".into()) },
-    credentials: Some(json!({ "password": { "config": { "password": "StrongPassword123!" } } })),
-    state: None,
+    credentials: Some(IdentityCredentials::password("StrongPassword123!")),
+    ..Default::default() // state, email_verified, metadata_public
 }).await?;
 
 // Change the email (JSON Patch, RFC 6902)
@@ -166,6 +166,25 @@ gate.identities().delete(&user.id).await?;
 ```
 
 `Identity` types the stable fields (`id`, `schema_id`, `state`, `traits`, `created_at`, `metadata_public`, …); the rest of the Kratos object is in `identity.extra`.
+
+**Importing users** from another system: send the bcrypt hash of their password instead of the password, the social accounts they signed in with, `email_verified: Some(true)` if that system had already confirmed the address, and your metadata — all in one call:
+
+```rust
+let imported = gate.identities().create(CreateIdentityParams {
+    schema_id: "user".into(),
+    traits: IdentityTraitsInput { email: "ada@example.com".into(), locale: None },
+    credentials: Some(
+        IdentityCredentials::hashed_password("$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG")
+            .with_oidc_provider("google", "109876543210987654321"),
+    ),
+    email_verified: Some(true), // the address starts confirmed; Gate sends no mail to check it
+    metadata_public: Some(json!({ "previous_user_id": "auth0|64f1c0ffee" })),
+    ..Default::default()
+}).await?;
+assert!(imported.verifiable_addresses[0].verified);
+```
+
+The user then signs in with their original password. Without `email_verified: Some(true)` a new user's address starts unconfirmed.
 
 ## Gate — organizations, roles and members
 
@@ -416,6 +435,21 @@ let job = clockwork.jobs().create(CreateCronJobParams {
 
 clockwork.jobs().update(&job.id, UpdateCronJobParams {
     is_active: Some(false),
+    ..Default::default()
+}).await?;
+
+// Read the schedule in a time zone: 09:00 in Paris all year round —
+// 07:00 UTC in summer, 08:00 UTC in winter. Without `timezone` a job is UTC.
+let morning = clockwork.jobs().create(CreateCronJobParams {
+    name: "morning-digest".into(),
+    schedule: "0 9 * * *".into(),
+    timezone: Some("Europe/Paris".into()), // IANA name; an unknown one is 400 invalid_payload
+    url: "https://example.com/hooks/digest".into(),
+    ..Default::default()
+}).await?;
+assert_eq!(morning.timezone, "Europe/Paris"); // next_run_at stays in UTC
+clockwork.jobs().update(&morning.id, UpdateCronJobParams {
+    timezone: Some("America/New_York".into()),
     ..Default::default()
 }).await?;
 

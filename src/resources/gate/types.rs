@@ -99,7 +99,7 @@ pub struct IdentityTraits {
 ///
 /// The schema allows only these two traits; anything else is refused with
 /// `400 invalid_payload`. Use custom metadata for your own fields.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct IdentityTraitsInput {
     /// Primary email address.
     pub email: String,
@@ -116,7 +116,7 @@ pub struct IdentityTraitsInput {
 /// # Example
 ///
 /// ```no_run
-/// use nautilus_rs::{Gate, CreateIdentityParams, IdentityTraitsInput};
+/// use nautilus_rs::{CreateIdentityParams, Gate, IdentityCredentials, IdentityTraitsInput};
 ///
 /// # async fn run() -> Result<(), nautilus_rs::Error> {
 /// let gate = Gate::new("vrn_9f8a7c1b2d3e4f50");
@@ -126,27 +126,181 @@ pub struct IdentityTraitsInput {
 ///         email: "alice@example.com".into(),
 ///         locale: Some("en".into()),
 ///     },
-///     credentials: None,
-///     state: Some("active".into()),
+///     credentials: Some(IdentityCredentials::password("StrongPassword123!")),
+///     ..Default::default()
 /// }).await?;
 /// println!("created: {}", identity.id);
 /// # Ok(())
 /// # }
 /// ```
-#[derive(Debug, Clone, serde::Serialize)]
+///
+/// # Example — import a user from another system
+///
+/// The bcrypt hash of their password, the social account they used, an address that
+/// system had already confirmed, and your metadata:
+///
+/// ```no_run
+/// use nautilus_rs::{CreateIdentityParams, Gate, IdentityCredentials, IdentityTraitsInput};
+/// use serde_json::json;
+///
+/// # async fn run() -> Result<(), nautilus_rs::Error> {
+/// let gate = Gate::new("vrn_9f8a7c1b2d3e4f50");
+/// let identity = gate.identities().create(CreateIdentityParams {
+///     schema_id: "user".into(),
+///     traits: IdentityTraitsInput { email: "ada@example.com".into(), locale: None },
+///     credentials: Some(
+///         IdentityCredentials::hashed_password("$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG")
+///             .with_oidc_provider("google", "109876543210987654321"),
+///     ),
+///     email_verified: Some(true),
+///     metadata_public: Some(json!({ "previous_user_id": "auth0|64f1c0ffee" })),
+///     ..Default::default()
+/// }).await?;
+/// assert!(identity.verifiable_addresses[0].verified);
+/// # Ok(())
+/// # }
+/// ```
+#[derive(Debug, Clone, Default, serde::Serialize)]
 pub struct CreateIdentityParams {
     /// Schema identifier the identity should conform to. Always `"user"`.
     pub schema_id: String,
     /// Profile traits for the new identity.
     pub traits: IdentityTraitsInput,
-    /// Optional credential material in the format the schema expects, e.g.
-    /// `{"password": {"config": {"password": "…"}}}`.
+    /// The initial password (or a bcrypt hash of an existing one) and the social accounts
+    /// to link.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub credentials: Option<Value>,
+    pub credentials: Option<IdentityCredentials>,
     /// Initial lifecycle state (`"active"` or `"inactive"`). Defaults to the schema
     /// default when `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub state: Option<String>,
+    /// `Some(true)` creates the user with the address already confirmed (`verified`,
+    /// status `"completed"`); `None` or `Some(false)` leaves it unconfirmed. It is your
+    /// word that the address is confirmed: Gate sends no mail to check it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub email_verified: Option<bool>,
+    /// Your custom metadata for the user, a JSON object, set at creation. The user can
+    /// read it; keep secrets out.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata_public: Option<Value>,
+}
+
+/// Credentials of a new identity, in [`CreateIdentityParams::credentials`]: a password or
+/// its bcrypt hash, and the social accounts to link.
+///
+/// ```
+/// use nautilus_rs::IdentityCredentials;
+///
+/// let credentials = IdentityCredentials::hashed_password("$2b$10$…")
+///     .with_oidc_provider("google", "109876543210987654321");
+/// assert_eq!(
+///     serde_json::to_value(&credentials).unwrap(),
+///     serde_json::json!({
+///         "password": { "config": { "hashed_password": "$2b$10$…" } },
+///         "oidc": { "config": { "providers": [
+///             { "provider": "google", "subject": "109876543210987654321" }
+///         ] } }
+///     })
+/// );
+/// ```
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct IdentityCredentials {
+    /// The password credential.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<PasswordCredential>,
+    /// Social accounts to link.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oidc: Option<OidcCredential>,
+}
+
+impl IdentityCredentials {
+    /// An initial password, in clear.
+    pub fn password(password: impl Into<String>) -> Self {
+        Self {
+            password: Some(PasswordCredential {
+                config: PasswordConfig {
+                    password: Some(password.into()),
+                    hashed_password: None,
+                },
+            }),
+            oidc: None,
+        }
+    }
+
+    /// A bcrypt hash (`$2a$…` or `$2b$…`) of the user's existing password; the user then
+    /// signs in with their original password.
+    pub fn hashed_password(hash: impl Into<String>) -> Self {
+        Self {
+            password: Some(PasswordCredential {
+                config: PasswordConfig {
+                    password: None,
+                    hashed_password: Some(hash.into()),
+                },
+            }),
+            oidc: None,
+        }
+    }
+
+    /// Links a social account: `provider` is a Gate provider id (`"google"`, `"github"`,
+    /// …) and `subject` that provider's id for the account. When the user signs in with
+    /// that provider and it reports the same `subject`, they land on this identity.
+    pub fn with_oidc_provider(
+        mut self,
+        provider: impl Into<String>,
+        subject: impl Into<String>,
+    ) -> Self {
+        self.oidc
+            .get_or_insert_with(OidcCredential::default)
+            .config
+            .providers
+            .push(OidcProviderLink {
+                provider: provider.into(),
+                subject: subject.into(),
+            });
+        self
+    }
+}
+
+/// The password part of [`IdentityCredentials`].
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct PasswordCredential {
+    /// Set `password` or `hashed_password`, not both.
+    pub config: PasswordConfig,
+}
+
+/// The password, or its bcrypt hash, of a new identity.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct PasswordConfig {
+    /// The initial password, in clear.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub password: Option<String>,
+    /// A bcrypt hash (`$2a$…` or `$2b$…`) of an existing password.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hashed_password: Option<String>,
+}
+
+/// The social-login part of [`IdentityCredentials`].
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct OidcCredential {
+    /// The accounts to link.
+    pub config: OidcConfig,
+}
+
+/// The social accounts linked to a new identity.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct OidcConfig {
+    /// One entry per linked account.
+    pub providers: Vec<OidcProviderLink>,
+}
+
+/// A social account linked to a new identity. `provider` and `subject` together are at
+/// most 254 characters, or the request is `400 invalid_payload`.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct OidcProviderLink {
+    /// A Gate provider id, e.g. `"google"`.
+    pub provider: String,
+    /// That provider's id for the account.
+    pub subject: String,
 }
 
 /// A single [RFC 6902](https://datatracker.ietf.org/doc/html/rfc6902) JSON

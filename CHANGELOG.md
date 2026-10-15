@@ -4,7 +4,32 @@ All notable changes to `nautilus-rs`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.4.1] — unreleased
+## [1.5.0] — unreleased
+
+### Added
+
+- **Time zones for cron jobs**: `CronJob::timezone` (an IANA name, `"UTC"` unless set — also
+  for an answer without the field), and `timezone` on `CreateCronJobParams` and
+  `UpdateCronJobParams`. `"0 9 * * *"` in `"Europe/Paris"` runs at 09:00 Paris time all year
+  round; `next_run_at` stays in UTC. An unknown zone is `400 invalid_payload`.
+- **Importing users**: `CreateIdentityParams` gains `email_verified` (`Some(true)` creates the
+  user with the address already confirmed) and `metadata_public`. Credentials are typed:
+  `IdentityCredentials::password(…)`, `::hashed_password(…)` (bcrypt) and
+  `.with_oidc_provider(provider, subject)`, over `PasswordCredential`, `PasswordConfig`,
+  `OidcCredential`, `OidcConfig` and `OidcProviderLink`.
+- `CreateIdentityParams` and `IdentityTraitsInput` derive `Default`, so a literal can end in
+  `..Default::default()` and a field added later does not break it.
+
+### Changed
+
+- **Source change for `CreateIdentityParams`**: `credentials` is
+  `Option<IdentityCredentials>` (it was `Option<serde_json::Value>`), and a literal that
+  names every field needs the two new ones or `..Default::default()`. Replace
+  `credentials: Some(json!({"password": {"config": {"password": p}}}))` with
+  `credentials: Some(IdentityCredentials::password(p))`. Likewise a `CreateCronJobParams` /
+  `UpdateCronJobParams` literal without `..Default::default()` needs `timezone`.
+
+## [1.4.1] — 2026-10-15
 
 ### Changed
 
