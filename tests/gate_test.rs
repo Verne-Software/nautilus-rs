@@ -1,7 +1,7 @@
 use mockito::Server;
 use nautilus_rs::{
-    AuthorizeParams, CreateIdentityParams, CreateTokenParams, Gate, IdentityTraitsInput,
-    JsonPatchOp, OidcProvider, SecuritySettings,
+    AuthorizeParams, CreateIdentityParams, CreateTokenParams, Gate, IdentityCredentials,
+    IdentityTraitsInput, JsonPatchOp, OidcProvider, SecuritySettings,
 };
 
 fn identity_json(id: &str) -> String {
@@ -38,6 +38,7 @@ async fn test_create_identity() {
             },
             credentials: None,
             state: Some("active".into()),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -502,4 +503,122 @@ async fn test_gate_api_error() {
         }
         other => panic!("expected Error::Api, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn test_create_identity_for_an_import() {
+    let mut server = Server::new_async().await;
+
+    let mock = server
+        .mock("POST", "/v1/gate/identities")
+        .match_body(mockito::Matcher::Json(serde_json::json!({
+            "schema_id": "user",
+            "traits": { "email": "ada@example.com" },
+            "credentials": {
+                "password": { "config": { "hashed_password": "$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG" } },
+                "oidc": { "config": { "providers": [ { "provider": "google", "subject": "109876543210987654321" } ] } }
+            },
+            "email_verified": true,
+            "metadata_public": { "previous_user_id": "auth0|64f1c0ffee" }
+        })))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(r#"{"id":"idn_002","schema_id":"user","state":"active","traits":{"email":"ada@example.com"},"metadata_public":{"previous_user_id":"auth0|64f1c0ffee"},"verifiable_addresses":[{"value":"ada@example.com","verified":true,"via":"email","status":"completed"}]}"#)
+        .create_async()
+        .await;
+
+    let gate = Gate::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+
+    let identity = gate
+        .identities()
+        .create(CreateIdentityParams {
+            schema_id: "user".into(),
+            traits: IdentityTraitsInput {
+                email: "ada@example.com".into(),
+                locale: None,
+            },
+            credentials: Some(
+                IdentityCredentials::hashed_password(
+                    "$2b$10$pl0VVKxZkNvtC9ttGwsT8.vPL8qWeEevw4a6FraeqQR8GQ6mT63NG",
+                )
+                .with_oidc_provider("google", "109876543210987654321")
+                .into(),
+            ),
+            email_verified: Some(true),
+            metadata_public: Some(serde_json::json!({ "previous_user_id": "auth0|64f1c0ffee" })),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert!(identity.verifiable_addresses[0].verified);
+    assert_eq!(
+        identity.metadata_public,
+        Some(serde_json::json!({ "previous_user_id": "auth0|64f1c0ffee" }))
+    );
+    mock.assert_async().await;
+}
+
+#[test]
+fn test_identity_credentials_password_serializes_without_the_hash() {
+    assert_eq!(
+        serde_json::to_value(IdentityCredentials::password("Secret123!")).unwrap(),
+        serde_json::json!({ "password": { "config": { "password": "Secret123!" } } })
+    );
+}
+
+/// 1.4.1 code — `credentials` as hand-written JSON, every field named — still compiles
+/// (with the two new fields) and sends the same body as the typed builder.
+#[tokio::test]
+async fn test_json_credentials_as_in_1_4_1_still_work_and_match_the_builder() {
+    let old_style = CreateIdentityParams {
+        schema_id: "user".into(),
+        traits: IdentityTraitsInput {
+            email: "user@example.com".into(),
+            locale: None,
+        },
+        credentials: Some(
+            serde_json::json!({ "password": { "config": { "password": "Secret123!" } } }),
+        ),
+        state: None,
+        email_verified: None,
+        metadata_public: None,
+    };
+    let typed = CreateIdentityParams {
+        schema_id: "user".into(),
+        traits: IdentityTraitsInput {
+            email: "user@example.com".into(),
+            locale: None,
+        },
+        credentials: Some(IdentityCredentials::password("Secret123!").into()),
+        ..Default::default()
+    };
+    let expected = serde_json::json!({
+        "schema_id": "user",
+        "traits": { "email": "user@example.com" },
+        "credentials": { "password": { "config": { "password": "Secret123!" } } }
+    });
+    assert_eq!(serde_json::to_value(&old_style).unwrap(), expected);
+    assert_eq!(serde_json::to_value(&typed).unwrap(), expected);
+
+    let mut server = Server::new_async().await;
+    let mock = server
+        .mock("POST", "/v1/gate/identities")
+        .match_body(mockito::Matcher::Json(expected))
+        .with_status(201)
+        .with_header("content-type", "application/json")
+        .with_body(identity_json("idn_003"))
+        .create_async()
+        .await;
+    let gate = Gate::builder()
+        .api_key("vrn_9f8a7c1b2d3e4f50")
+        .base_url(server.url())
+        .build()
+        .unwrap();
+    gate.identities().create(old_style).await.unwrap();
+    mock.assert_async().await;
 }

@@ -4,7 +4,27 @@ All notable changes to `nautilus-rs`. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/).
 
-## [1.4.1] — unreleased
+## [1.5.0] — unreleased
+
+### Added
+
+- **Time zones for cron jobs**: `CronJob::timezone` (an IANA name, `"UTC"` unless set — also
+  for an answer without the field), and `timezone` on `CreateCronJobParams` and
+  `UpdateCronJobParams`. `"0 9 * * *"` in `"Europe/Paris"` runs at 09:00 Paris time all year
+  round; `next_run_at` stays in UTC. An unknown zone is `400 invalid_payload`.
+- **Importing users**: `CreateIdentityParams` gains `email_verified` (`Some(true)` creates the
+  user with the address already confirmed) and `metadata_public`. `credentials` stays a
+  `serde_json::Value`, so 1.4 code with `json!({…})` is unchanged; the new
+  `IdentityCredentials` builds it typed — `IdentityCredentials::password(…)`,
+  `::hashed_password(…)` (bcrypt), `.with_oidc_provider(provider, subject)` — and converts
+  with `.into()` (over `PasswordCredential`, `PasswordConfig`, `OidcCredential`,
+  `OidcConfig` and `OidcProviderLink`).
+- `CreateIdentityParams` and `IdentityTraitsInput` derive `Default`. Ending a params literal
+  in `..Default::default()` keeps it compiling when a later release adds an optional field
+  (as this one does for `CreateIdentityParams`, `CreateCronJobParams` and
+  `UpdateCronJobParams`).
+
+## [1.4.1] — 2026-10-15
 
 ### Changed
 
