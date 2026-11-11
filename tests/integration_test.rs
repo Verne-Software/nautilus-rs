@@ -1,4 +1,5 @@
-//! Integration suite: every 1.4.0 resource against a real Nautilus stack.
+//! Integration suite: every Gate resource against a real Nautilus stack (1.4.0), plus what
+//! 1.5.0 and 1.6.0 added.
 //!
 //! **Opt-in.** Every test here is `#[ignore]`d, so `cargo test` never runs it, and it needs
 //! the `jwt` feature (it verifies a signed token). Run it against a LOCAL stack:
@@ -30,12 +31,12 @@ use std::{
 };
 
 use nautilus_rs::{
-    AddMemberParams, ApiError, AuthorizeParams, AuthorizeReason, CreateCronJobParams,
+    error_reason, AddMemberParams, ApiError, AuthorizeParams, AuthorizeReason, CreateCronJobParams,
     CreateIdentityParams, CreateOrganizationParams, CreateRoleParams, CreateTokenParams, Error,
     Gate, GateTokenVerifier, IdentityCredentials, IdentityTraitsInput, LifecycleRuleKind,
     ListAuditLogParams, ListLifecycleActionsParams, ListParams, LoginFlowParams, Passepartout,
     SecuritySettings, SetRuleParams, TokenErrorReason, UpdateCronJobParams, UpdateMemberParams,
-    UpdateRoleParams, Verne,
+    UpdateOrganizationParams, UpdateRoleParams, Verne,
 };
 use serde_json::json;
 
@@ -1108,13 +1109,21 @@ async fn clockwork_timezones_against_a_live_stack() {
     jobs.delete(&job.id).await.unwrap();
 
     assert_eq!(job.timezone, "Europe/Paris");
-    // 09:00 in Paris in October (CEST, UTC+2) is 07:00 UTC.
-    assert!(at_utc(&job.next_run_at, "07"), "{:?}", job.next_run_at);
+    // 09:00 in Paris is 07:00 UTC in summer (CEST, UTC+2) and 08:00 UTC in winter (CET).
+    assert!(
+        at_utc(&job.next_run_at, "07") || at_utc(&job.next_run_at, "08"),
+        "{:?}",
+        job.next_run_at
+    );
     assert_eq!(listed.unwrap().as_deref(), Some("Europe/Paris"));
     let moved = moved.unwrap();
     assert_eq!(moved.timezone, "America/New_York");
-    // 09:00 in New York in October (EDT, UTC-4) is 13:00 UTC.
-    assert!(at_utc(&moved.next_run_at, "13"), "{:?}", moved.next_run_at);
+    // 09:00 in New York is 13:00 UTC in summer (EDT, UTC-4) and 14:00 UTC in winter (EST).
+    assert!(
+        at_utc(&moved.next_run_at, "13") || at_utc(&moved.next_run_at, "14"),
+        "{:?}",
+        moved.next_run_at
+    );
     api(unknown, 400, Some("invalid_payload"));
 
     // Without a zone a job is UTC.
@@ -1198,4 +1207,230 @@ async fn identity_import_against_a_live_stack() {
         "login with the original password"
     );
     assert!(session_token.1.is_some());
+}
+
+/// 1.6.0: what the organization routes say since Nautilus v1.10.44 — `member_count`,
+/// `email` and `display_name` on members, `total` on the lists, the `reason` of their 404s
+/// and 409s, and the audit entries for creating and renaming an organization.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs a running local stack and VERNE_API_KEY; see the module docs"]
+async fn organization_fields_against_a_live_stack() {
+    let env = env();
+    let gate = |env: &Env| {
+        Gate::builder()
+            .api_key(&env.key)
+            .base_url(&env.base_url)
+            .build()
+            .unwrap()
+    };
+    let cleaner = gate(&env);
+
+    with_cleanup(&cleaner, move |created| {
+        let gate = gate(&env);
+        async move { organization_fields_suite(gate, env, created).await }
+    })
+    .await;
+}
+
+fn reason_of(
+    result: Result<impl std::fmt::Debug, Error>,
+    status: u16,
+    code: &str,
+) -> Option<String> {
+    api(result, status, Some(code)).reason
+}
+
+async fn organization_fields_suite(gate: Gate, env: Env, created: Arc<Mutex<Created>>) {
+    let email = |n: &str| format!("{}-{n}@e2e.soft.com", env.prefix);
+    let person = |n: &str| CreateIdentityParams {
+        schema_id: "user".into(),
+        traits: IdentityTraitsInput {
+            email: email(n),
+            locale: None,
+        },
+        ..Default::default()
+    };
+    let alice = gate.identities().create(person("org-alice")).await.unwrap();
+    created.lock().unwrap().identities.push(alice.id.clone());
+    let bob = gate.identities().create(person("org-bob")).await.unwrap();
+    created.lock().unwrap().identities.push(bob.id.clone());
+    let orgs = gate.organizations();
+    let one = || ListParams {
+        limit: Some(1),
+        cursor: None,
+    };
+
+    // A new organization and its roles count nobody; the lists carry total.
+    let before = orgs.list(one()).await.unwrap().total.expect("total");
+    let name = format!("{} Acme", env.prefix);
+    let org = orgs
+        .create(CreateOrganizationParams { name: name.clone() })
+        .await
+        .unwrap();
+    created.lock().unwrap().organization = Some(org.id.clone());
+    assert_eq!(org.member_count, 0);
+    let after = orgs.list(one()).await.unwrap();
+    assert_eq!(after.total, Some(before + 1));
+    assert_eq!(after.data.len(), 1);
+
+    let roles = orgs.roles();
+    let admin = roles
+        .create(
+            &org.id,
+            CreateRoleParams {
+                name: "admin".into(),
+                permissions: Some(vec!["invoices:write".into()]),
+            },
+        )
+        .await
+        .unwrap();
+    let viewer = roles
+        .create(
+            &org.id,
+            CreateRoleParams {
+                name: "viewer".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(admin.member_count, 0);
+    let role_page = roles.list(&org.id, one()).await.unwrap();
+    assert_eq!(role_page.data.len(), 1);
+    assert_eq!(role_page.total, Some(2));
+
+    // A member answer carries the person's email and display_name.
+    let members = orgs.members();
+    let add = |identity_id: &str, role_id: &str| AddMemberParams {
+        identity_id: identity_id.into(),
+        role_id: role_id.into(),
+        expires_at: None,
+    };
+    let to_role = |role_id: &str| UpdateMemberParams {
+        role_id: Some(role_id.into()),
+        ..Default::default()
+    };
+    let added = members
+        .add(&org.id, add(&alice.id, &admin.id))
+        .await
+        .unwrap();
+    assert_eq!(added.email.as_deref(), Some(email("org-alice").as_str()));
+    // The `user` schema has no name trait: an API-created user has none.
+    assert_eq!(added.display_name, None);
+    let moved = members
+        .update(&org.id, &alice.id, to_role(&viewer.id))
+        .await
+        .unwrap();
+    assert_eq!(moved.email.as_deref(), Some(email("org-alice").as_str()));
+    members
+        .update(&org.id, &alice.id, to_role(&admin.id))
+        .await
+        .unwrap();
+    let member_page = members.list(&org.id, ListParams::default()).await.unwrap();
+    assert_eq!(member_page.total, Some(1));
+    let listed: Vec<(String, Option<String>)> = member_page
+        .data
+        .iter()
+        .map(|m| (m.identity_id.clone(), m.email.clone()))
+        .collect();
+    assert_eq!(listed, vec![(alice.id.clone(), Some(email("org-alice")))]);
+
+    // member_count follows the memberships.
+    assert_eq!(orgs.get(&org.id).await.unwrap().member_count, 1);
+    assert_eq!(roles.get(&org.id, &admin.id).await.unwrap().member_count, 1);
+    assert_eq!(
+        roles.get(&org.id, &viewer.id).await.unwrap().member_count,
+        0
+    );
+    let all = orgs
+        .list(ListParams {
+            limit: Some(100),
+            cursor: None,
+        })
+        .await
+        .unwrap();
+    let listed = all.data.iter().find(|o| o.id == org.id).expect("listed");
+    assert_eq!(listed.member_count, 1);
+
+    // Every 409 says why.
+    let admin_again = CreateRoleParams {
+        name: "admin".into(),
+        ..Default::default()
+    };
+    assert_eq!(
+        reason_of(roles.create(&org.id, admin_again).await, 409, "conflict").as_deref(),
+        Some(error_reason::ROLE_NAME_TAKEN)
+    );
+    assert_eq!(
+        reason_of(
+            members.add(&org.id, add(&alice.id, &viewer.id)).await,
+            409,
+            "conflict"
+        )
+        .as_deref(),
+        Some(error_reason::ALREADY_MEMBER)
+    );
+    assert_eq!(
+        reason_of(roles.delete(&org.id, &admin.id).await, 409, "conflict").as_deref(),
+        Some(error_reason::ROLE_HELD)
+    );
+
+    // Every 404 says what.
+    assert_eq!(
+        reason_of(orgs.get(NIL_UUID).await, 404, "not_found").as_deref(),
+        Some(error_reason::ORGANIZATION)
+    );
+    assert_eq!(
+        reason_of(roles.get(&org.id, NIL_UUID).await, 404, "not_found").as_deref(),
+        Some(error_reason::ROLE)
+    );
+    assert_eq!(
+        reason_of(
+            members.update(&org.id, &bob.id, to_role(&viewer.id)).await,
+            404,
+            "not_found"
+        )
+        .as_deref(),
+        Some(error_reason::MEMBER)
+    );
+    assert_eq!(
+        reason_of(
+            members.add(&org.id, add(NIL_UUID, &viewer.id)).await,
+            404,
+            "not_found"
+        )
+        .as_deref(),
+        Some(error_reason::END_USER)
+    );
+
+    // The audit log records creating and renaming the organization.
+    let renamed = orgs
+        .update(
+            &org.id,
+            UpdateOrganizationParams {
+                name: format!("{name} Corp"),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(renamed.member_count, 1);
+    let entries = |action: &str| ListAuditLogParams {
+        action: Some(action.into()),
+        target_id: Some(org.id.clone()),
+        ..Default::default()
+    };
+    let audit = gate.audit_log();
+    let created_entries = audit.list(entries("organization.created")).await.unwrap();
+    assert_eq!(created_entries.data.len(), 1);
+    assert_eq!(created_entries.data[0].details["name"], json!(name));
+    let updated_entries = audit.list(entries("organization.updated")).await.unwrap();
+    assert_eq!(updated_entries.data.len(), 1);
+    assert_eq!(
+        updated_entries.data[0].details["previous_name"],
+        json!(name)
+    );
+    assert_eq!(
+        updated_entries.data[0].details["name"],
+        json!(format!("{name} Corp"))
+    );
 }

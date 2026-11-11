@@ -72,6 +72,7 @@ impl OrganizationsClient {
     }
 
     /// List the project's organizations, oldest first, cursor-paged.
+    /// [`Paginated::total`] is how many the project has in all.
     ///
     /// Maps to `GET /v1/gate/organizations`.
     pub async fn list(&self, params: ListParams) -> Result<Paginated<Organization>, Error> {
@@ -80,7 +81,8 @@ impl OrganizationsClient {
             .await
     }
 
-    /// Fetch one organization.
+    /// Fetch one organization. `404 not_found` with reason
+    /// [`ORGANIZATION`](crate::error_reason::ORGANIZATION) if the project has none by that id.
     ///
     /// Maps to `GET /v1/gate/organizations/{org_id}`.
     pub async fn get(&self, org_id: &str) -> Result<Organization, Error> {
@@ -205,8 +207,9 @@ impl RolesClient {
         format!("{}/{}", Self::path(org_id), seg(role_id))
     }
 
-    /// Define a role. `409 conflict` if the name is taken in the organization,
-    /// `409 limit_reached` past 100 roles.
+    /// Define a role. `409 conflict` with reason
+    /// [`ROLE_NAME_TAKEN`](crate::error_reason::ROLE_NAME_TAKEN) if the name is taken in the
+    /// organization, `409 limit_reached` past 100 roles.
     ///
     /// Maps to `POST /v1/gate/organizations/{org_id}/roles`.
     ///
@@ -231,7 +234,8 @@ impl RolesClient {
         self.http.post(&Self::path(org_id), &params).await
     }
 
-    /// List an organization's roles, oldest first, cursor-paged.
+    /// List an organization's roles, oldest first, cursor-paged. [`Paginated::total`] is
+    /// how many it has in all.
     ///
     /// Maps to `GET /v1/gate/organizations/{org_id}/roles`.
     pub async fn list(&self, org_id: &str, params: ListParams) -> Result<Paginated<Role>, Error> {
@@ -257,8 +261,9 @@ impl RolesClient {
         self.http.patch(&Self::one(org_id, role_id), &params).await
     }
 
-    /// Delete a role. A role somebody still holds is `409 conflict` (the message has the
-    /// count).
+    /// Delete a role. A role somebody still holds is `409 conflict` with reason
+    /// [`ROLE_HELD`](crate::error_reason::ROLE_HELD) (the message has the count);
+    /// [`Role::member_count`] says so before you try.
     ///
     /// Maps to `DELETE /v1/gate/organizations/{org_id}/roles/{role_id}`.
     pub async fn delete(&self, org_id: &str, role_id: &str) -> Result<(), Error> {
@@ -284,8 +289,10 @@ impl MembersClient {
 
     /// Add an end user to the organization with a role, optionally until a deadline.
     ///
-    /// `409 conflict` if they are already a member; `404` if the identity is not one of
-    /// your end users. Maps to `POST /v1/gate/organizations/{org_id}/members`.
+    /// `409 conflict` with reason [`ALREADY_MEMBER`](crate::error_reason::ALREADY_MEMBER) if
+    /// they are already a member; `404 not_found` with reason
+    /// [`END_USER`](crate::error_reason::END_USER) if the identity is not one of your end
+    /// users. Maps to `POST /v1/gate/organizations/{org_id}/members`.
     ///
     /// # Example
     ///
@@ -309,7 +316,9 @@ impl MembersClient {
         self.http.post(&Self::path(org_id), &params).await
     }
 
-    /// List an organization's members, oldest first, cursor-paged.
+    /// List an organization's members, oldest first, cursor-paged, each with its
+    /// [`email`](Member::email) and [`display_name`](Member::display_name).
+    /// [`Paginated::total`] is how many it has in all.
     ///
     /// Maps to `GET /v1/gate/organizations/{org_id}/members`.
     pub async fn list(&self, org_id: &str, params: ListParams) -> Result<Paginated<Member>, Error> {
@@ -317,7 +326,8 @@ impl MembersClient {
     }
 
     /// Change a member's role and/or deadline. See [`UpdateMemberParams`] for how
-    /// `expires_at` tells *keep*, *remove* and *set* apart.
+    /// `expires_at` tells *keep*, *remove* and *set* apart. A person who is not a member is
+    /// `404 not_found` with reason [`MEMBER`](crate::error_reason::MEMBER).
     ///
     /// Maps to `PATCH /v1/gate/organizations/{org_id}/members/{identity_id}`.
     ///

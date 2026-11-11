@@ -90,6 +90,13 @@ pub struct ApiError {
     /// Clockwork one, `required_aal` and `current_aal` on `403 mfa_required`. Empty when
     /// there are none.
     pub details: Map<String, Value>,
+    /// Which one of its kind the error is, when the API says: on the organization routes a
+    /// `404 not_found` names what was not found and a `409 conflict` why it is one — the
+    /// [`error_reason`](crate::error_reason) constants. [`code`](Self::code) is unchanged,
+    /// so code that ignores `reason` behaves as before. `None` when the error has none, and
+    /// for a body that is not the API's envelope (an identity-service body, whose `reason`
+    /// is a sentence). The same value stays in [`details`](Self::details)`["reason"]`.
+    pub reason: Option<String>,
     /// Seconds from the `Retry-After` header, when the response had one (delta-seconds
     /// only). On a `429` it is how long to wait; for `RELAY_MESSAGE_LIMIT_REACHED` it
     /// runs to the 1st of next month.
@@ -124,17 +131,63 @@ impl ApiError {
                 .map(str::to_owned)
         };
 
+        let code = string_member("code");
+        // Only from the envelope proper: next to a numeric code (Kratos) `reason` is a
+        // sentence for people, not a code.
+        let reason = code.as_ref().and_then(|_| string_member("reason"));
+
         Self {
             // A non-string code (Kratos' numeric `404`) is never used.
-            code: string_member("code").unwrap_or_else(|| "unknown".into()),
+            code: code.unwrap_or_else(|| "unknown".into()),
             message: extract_message(body.as_ref(), status),
             status,
             request_id: string_member("request_id").unwrap_or_default(),
             details,
+            reason,
             retry_after,
             body,
         }
     }
+}
+
+/// The reasons of a `404 not_found` and a `409 conflict` on the organization routes, in
+/// [`ApiError::reason`].
+///
+/// The `code` is unchanged; the reason says which one of its kind the error is, so code
+/// need not read the message. The set is open: keep an arm for a reason you do not know. A
+/// role limit hit is `409 limit_reached`, with no reason.
+///
+/// ```no_run
+/// # use nautilus_rs::{error_reason, Error};
+/// # fn handle(err: Error) {
+/// match err {
+///     Error::Api(e) if e.reason.as_deref() == Some(error_reason::ROLE_HELD) => {
+///         // move the members to another role first
+///     }
+///     Error::Api(e) if e.reason.as_deref() == Some(error_reason::ALREADY_MEMBER) => {
+///         // change their role with members().update() instead
+///     }
+///     other => eprintln!("{other}"),
+/// }
+/// # }
+/// ```
+pub mod error_reason {
+    /// `404`: no such organization in the key's project (another project's looks the same).
+    pub const ORGANIZATION: &str = "organization";
+    /// `404`: no such role in that organization.
+    pub const ROLE: &str = "role";
+    /// `404`: the person is not a member of the organization.
+    pub const MEMBER: &str = "member";
+    /// `404`: `identity_id` is not one of your end users.
+    pub const END_USER: &str = "end_user";
+    /// `404`: no such project.
+    pub const PROJECT: &str = "project";
+    /// `409`: the organization already has a role with that name.
+    pub const ROLE_NAME_TAKEN: &str = "role_name_taken";
+    /// `409`: someone holds the role, so it cannot be deleted.
+    pub const ROLE_HELD: &str = "role_held";
+    /// `409`: the person is already a member of the organization.
+    pub const ALREADY_MEMBER: &str = "already_member";
 }
 
 /// Best-effort human-readable message from an arbitrary error body: the envelope's

@@ -845,6 +845,9 @@ pub struct Organization {
     pub id: String,
     /// Free text, 1–120 characters, not unique.
     pub name: String,
+    /// How many people hold a role in the organization right now.
+    #[serde(default)]
+    pub member_count: u64,
     /// ISO 8601 creation time.
     pub created_at: String,
     /// ISO 8601 time of the last change.
@@ -877,6 +880,10 @@ pub struct Role {
     /// Sorted and de-duplicated by the API.
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// How many people hold the role right now. A role someone holds cannot be deleted
+    /// (`409 conflict`, reason [`ROLE_HELD`](crate::error_reason::ROLE_HELD)).
+    #[serde(default)]
+    pub member_count: u64,
     /// ISO 8601 creation time.
     pub created_at: String,
     /// ISO 8601 time of the last change.
@@ -919,6 +926,13 @@ pub struct Member {
     pub identity_id: String,
     /// The role they hold.
     pub role_id: String,
+    /// The person's address, or `None` when they have none (a Telegram user has no email).
+    #[serde(default)]
+    pub email: Option<String>,
+    /// What the person is called, or `None`: the `display_name` trait, or for a Telegram
+    /// user the first name (failing that, the username) they signed in with.
+    #[serde(default)]
+    pub display_name: Option<String>,
     /// When the membership ends, or `None` for never.
     #[serde(default)]
     pub expires_at: Option<String>,
@@ -930,8 +944,9 @@ pub struct Member {
 
 /// Parameters for [`MembersClient::add`](super::MembersClient::add).
 ///
-/// Adding an existing member is `409 conflict`; an identity that is not one of your end
-/// users is `404`.
+/// Adding an existing member is `409 conflict` with reason
+/// [`ALREADY_MEMBER`](crate::error_reason::ALREADY_MEMBER); an identity that is not one of
+/// your end users is `404 not_found` with reason [`END_USER`](crate::error_reason::END_USER).
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AddMemberParams {
     /// One of your end users.
