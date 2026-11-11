@@ -38,6 +38,11 @@ pub struct Paginated<T> {
     /// Opaque cursor to pass as `cursor` in the next request. `None` when
     /// `has_more` is `false`.
     pub next_cursor: Option<String>,
+    /// How many items the whole list has, the same on every page whatever `limit` and
+    /// `cursor` say. `Some` on the lists that count (organizations, roles, members),
+    /// `None` on the others.
+    #[serde(default)]
+    pub total: Option<u64>,
 }
 
 /// Cursor-paging parameters shared by the Gate list endpoints (organizations, roles,

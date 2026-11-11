@@ -84,7 +84,7 @@ match verne.gate()?.identities().get("idn_…").await {
 }
 ```
 
-`ApiError` has `code`, `message`, `status`, `request_id` (empty when the response had none), `details` (every member of `error` besides `code`/`message`/`request_id`), `retry_after` (seconds, from the `Retry-After` header) and `body` (the raw parsed body). Every API route, Clockwork's included, answers in the standard envelope with a string `code` and a `request_id`. Parsing never fails: a body in another shape (one that did not come from the API — a proxy in between, an identity-service answer passed through on `/auth/*`) is still an `Error::Api`, with `code == "unknown"` and whatever sentence it had in `message`.
+`ApiError` has `code`, `message`, `status`, `request_id` (empty when the response had none), `details` (every member of `error` besides `code`/`message`/`request_id`), `reason` (on a `404`/`409` of the organization routes, which one it is — see below), `retry_after` (seconds, from the `Retry-After` header) and `body` (the raw parsed body). Every API route, Clockwork's included, answers in the standard envelope with a string `code` and a `request_id`. Parsing never fails: a body in another shape (one that did not come from the API — a proxy in between, an identity-service answer passed through on `/auth/*`) is still an `Error::Api`, with `code == "unknown"` and whatever sentence it had in `message`.
 
 | Status | Codes | Meaning |
 |---|---|---|
@@ -92,8 +92,8 @@ match verne.gate()?.identities().get("idn_…").await {
 | `401` | `unauthorized` | Missing, wrong or revoked key; or a dead session |
 | `402` | `ACTIVE_USER_LIMIT_REACHED`, `UPGRADE_REQUIRED`, `JOB_LIMIT_REACHED`, `PROJECT_LIMIT_REACHED`, `BILLING_HARD_BLOCKED`, `SUBSCRIPTION_PAST_DUE`, `payment_required` | A plan limit or a billing state; the numbers are in `details` |
 | `403` | `forbidden`, `plan_required`, `mfa_required`, `account_disabled` | `forbidden` = the key lacks the scope for this API |
-| `404` | `not_found` | Unknown id, or one that is not in your account |
-| `409` | `conflict`, `limit_reached` | Already exists **in your account** (see below) |
+| `404` | `not_found` | Unknown id, or one that is not in your account. On the organization routes `reason` says what: `organization`, `role`, `member`, `end_user` |
+| `409` | `conflict`, `limit_reached` | Already exists **in your account** (see below). On the organization routes `reason` says which: `role_name_taken`, `role_held`, `already_member` |
 | `429` | `rate_limited`, `RELAY_MESSAGE_LIMIT_REACHED` | See below |
 | `500` | `internal_error` | |
 | `502`/`503`/`504` | `upstream_unavailable` | Worth a retry |
@@ -209,8 +209,16 @@ orgs.members().add(&org.id, AddMemberParams {
     expires_at: None, // or Some("2027-01-01T00:00:00Z".into())
 }).await?;
 
-// One page; loop on page.has_more with cursor: page.next_cursor
+// One page; loop on page.has_more with cursor: page.next_cursor.
+// page.total is how many the whole list has, the same on every page.
 let page = orgs.list(ListParams { limit: Some(50), cursor: None }).await?;
+let people = page.data[0].member_count; // how many hold a role in it (roles have one too)
+
+// Members carry who they are: email is None for a Telegram user, display_name may be None
+let members = orgs.members().list(&org.id, ListParams::default()).await?;
+for m in &members.data {
+    println!("{} {:?} {:?}", m.identity_id, m.email, m.display_name);
+}
 
 // A user's organizations, with the role and permissions held in each
 let held = gate.identities().list_organizations(&user.id, ListParams::default()).await?;
@@ -228,7 +236,19 @@ orgs.members().update(&org.id, &user.id, UpdateMemberParams {
 }).await?;
 ```
 
-Permissions are lowercase segments joined by `:` (`invoices:write`); `*` and the `nautilus:` prefix are reserved. `roles().update` with `permissions` **replaces** the set. Deleting a role somebody holds is `409`; deleting an organization removes its roles and members.
+Permissions are lowercase segments joined by `:` (`invoices:write`); `*` and the `nautilus:` prefix are reserved. `roles().update` with `permissions` **replaces** the set. Deleting a role somebody holds is `409` with `reason` `role_held` (its `member_count` says so before you try); deleting an organization removes its roles and members.
+
+A `404` or `409` on these routes says which one it is in `e.reason`; the values are the `nautilus_rs::error_reason` constants, and `code` is unchanged:
+
+```rust
+use nautilus_rs::{error_reason, Error};
+
+match orgs.members().add(&org.id, AddMemberParams { identity_id: user.id.clone(), role_id: admin.id.clone(), expires_at: None }).await {
+    Err(Error::Api(e)) if e.reason.as_deref() == Some(error_reason::ALREADY_MEMBER) => { /* update() instead */ }
+    Err(Error::Api(e)) if e.reason.as_deref() == Some(error_reason::END_USER) => { /* not one of your users */ }
+    other => { other?; }
+}
+```
 
 ### Checking a permission
 

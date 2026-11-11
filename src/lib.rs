@@ -109,7 +109,7 @@ mod resources;
 mod types;
 
 pub use client::{Verne, VerneBuilder};
-pub use error::{ApiError, Error, TokenError, TokenErrorReason};
+pub use error::{error_reason, ApiError, Error, TokenError, TokenErrorReason};
 pub use types::{ListParams, Paginated};
 
 pub use resources::relay::types::{ListMessagesParams, Message, SendMessageParams};
