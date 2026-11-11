@@ -6,6 +6,8 @@ All notable changes to `nautilus-rs`. The format follows
 
 ## [1.6.0] — unreleased
 
+The first release on crates.io since 1.4.1: it also carries everything in 1.5.0 below.
+
 What the organization routes answer since Nautilus v1.10.44, deserialised into the structs.
 
 ### Added
@@ -34,7 +36,9 @@ The new fields are public fields of response structs, as `CronJob::timezone` was
 code that only reads them is unaffected; a struct literal of `Organization`, `Role`,
 `Member`, `Paginated` or `ApiError` written by hand (in a test, say) needs the new fields.
 
-## [1.5.0] — unreleased
+## [1.5.0] — tagged 2026-10-25, not published
+
+Tagged `v1.5.0` but never published to crates.io: its changes reach crates.io in 1.6.0. Going from 1.4.1 to 1.6.0 brings everything below.
 
 ### Added
 
